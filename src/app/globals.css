@@ -1,0 +1,36 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 240 10% 4%;
+  --foreground: 240 5% 90%;
+  --card: 240 10% 6%;
+  --card-foreground: 240 5% 90%;
+  --primary: 239 84% 67%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 240 5% 15%;
+  --secondary-foreground: 240 5% 90%;
+  --muted: 240 5% 12%;
+  --muted-foreground: 240 5% 65%;
+  --accent: 240 5% 15%;
+  --accent-foreground: 240 5% 90%;
+  --border: 240 5% 15%;
+  --input: 240 5% 15%;
+  --ring: 239 84% 67%;
+  --radius: 0.5rem;
+}
+
+* { border-color: hsl(var(--border)); }
+body { background-color: hsl(var(--background)); color: hsl(var(--foreground)); }
+
+@layer utilities {
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-indigo-500 via-purple-500 to-cyan-500;
+  }
+  .bg-grid {
+    background-image: linear-gradient(rgba(99,102,241,0.04) 1px, transparent 1px),
+                      linear-gradient(90deg, rgba(99,102,241,0.04) 1px, transparent 1px);
+    background-size: 60px 60px;
+  }
+}
