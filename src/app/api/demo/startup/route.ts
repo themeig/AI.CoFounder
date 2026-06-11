@@ -1,25 +1,60 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { cookies } from "next/headers";
+
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 export async function GET() {
   try {
-    // Get demo user from cookie
-    const cookieStore = cookies();
-    const demoUserId = cookieStore.get("demo_user")?.value;
-
-    if (!demoUserId) {
-      return NextResponse.json({ error: "No demo user" }, { status: 401 });
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      return NextResponse.json([], { status: 200 });
     }
 
-    const startups = await db.startup.findMany({
-      where: { userId: demoUserId },
-      include: { agentConfigs: true },
-    });
+    const headers = {
+      "apikey": SUPABASE_SERVICE_KEY,
+      "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
+    };
 
-    return NextResponse.json(startups);
-  } catch (error) {
-    console.error("Get demo startup error:", error);
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    // Get demo user
+    const userRes = await fetch(
+      SUPABASE_URL + "/rest/v1/User?email=eq.demo@agentfoundry.ai&select=id",
+      { headers }
+    );
+    const users = await userRes.json();
+    if (!users || users.length === 0) {
+      return NextResponse.json([], { status: 200 });
+    }
+    const userId = users[0].id;
+
+    // Get startup
+    const startupRes = await fetch(
+      SUPABASE_URL + "/rest/v1/Startup?userId=eq." + userId + "&select=*",
+      { headers }
+    );
+    const startups = await startupRes.json();
+    if (!startups || startups.length === 0) {
+      return NextResponse.json([], { status: 200 });
+    }
+
+    // Get agent configs
+    const agentsRes = await fetch(
+      SUPABASE_URL + "/rest/v1/AgentConfig?userId=eq." + userId + "&select=id,type,name,isActive",
+      { headers }
+    );
+    let agents = [];
+    try {
+      agents = await agentsRes.json();
+    } catch (e) {
+      // ignore
+    }
+
+    const result = startups.map((s) => ({
+      ...s,
+      agentConfigs: Array.isArray(agents) ? agents : [],
+    }));
+
+    return NextResponse.json(result);
+  } catch (err) {
+    console.error("Demo startup error:", err);
+    return NextResponse.json([], { status: 200 });
   }
 }

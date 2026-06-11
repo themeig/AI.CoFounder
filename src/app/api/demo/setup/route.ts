@@ -1,106 +1,92 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { cookies } from "next/headers";
+
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 export async function POST() {
   try {
-    // Check if demo user already exists
-    let user = await db.user.findUnique({
-      where: { email: "demo@agentfoundry.ai" },
-    });
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      return NextResponse.json({ error: "Supabase non configurato" }, { status: 500 });
+    }
 
-    if (!user) {
-      // Create demo user
-      user = await db.user.create({
-        data: {
+    const headers = {
+      "apikey": SUPABASE_SERVICE_KEY,
+      "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+    };
+
+    // 1. Check if demo user exists
+    const userCheckRes = await fetch(
+      SUPABASE_URL + "/rest/v1/User?email=eq.demo@agentfoundry.ai&select=id",
+      { headers }
+    );
+    const existingUsers = await userCheckRes.json();
+
+    let userId = null;
+
+    if (existingUsers && existingUsers.length > 0) {
+      userId = existingUsers[0].id;
+    } else {
+      // Create demo user (columns: id, name, email, emailVerified, image, createdAt, updatedAt)
+      const createRes = await fetch(SUPABASE_URL + "/rest/v1/User", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
           email: "demo@agentfoundry.ai",
           name: "Demo Founder",
-        },
+        }),
       });
-
-      // Create demo startup
-      const startup = await db.startup.create({
-        data: {
-          userId: user.id,
-          name: "TechFlow",
-          description: "AI-powered project management for remote teams. We help distributed teams collaborate better with AI-assisted task management and automated workflows.",
-          website: "https://techflow-demo.vercel.app",
-          sector: "saas",
-          phase: "mvp",
-          country: "Italy",
-          teamSize: 3,
-          mrr: 2500,
-          users: 150,
-          burnRate: 8000,
-          runway: 6,
-          fundingRaised: 0,
-        },
-      });
-
-      // Create agent configs
-      const agentTypes = [
-        { type: "strategy", name: "Strategy Agent", active: true },
-        { type: "tech", name: "Tech Agent", active: true },
-        { type: "finance", name: "Finance Agent", active: true },
-        { type: "marketing", name: "Marketing Agent", active: false },
-        { type: "legal", name: "Legal Agent", active: false },
-        { type: "operations", name: "Operations Agent", active: false },
-      ];
-
-      for (const agent of agentTypes) {
-        await db.agentConfig.create({
-          data: {
-            startupId: startup.id,
-            type: agent.type,
-            name: agent.name,
-            isActive: agent.active,
-          },
-        });
+      const newUsers = await createRes.json();
+      if (Array.isArray(newUsers) && newUsers.length > 0) {
+        userId = newUsers[0].id;
       }
+    }
 
-      // Create some demo interactions
-      await db.interaction.create({
-        data: {
-          startupId: startup.id,
-          agentType: "strategy",
-          category: "growth",
-          advice: "Focus on Product-Led Growth with a freemium tier. Your viral coefficient should be > 0.3 for organic growth.",
-          context: { mrr: 2500, users: 150, phase: "mvp" },
-        },
-      });
+    if (!userId) {
+      return NextResponse.json({ error: "Impossibile creare utente demo" }, { status: 500 });
+    }
 
-      await db.interaction.create({
-        data: {
-          startupId: startup.id,
-          agentType: "finance",
-          category: "fundraising",
-          advice: "With $2.5K MRR and 6 months runway, start fundraising in 3-4 months. Target $500K-$1M seed round.",
-          context: { mrr: 2500, burnRate: 8000, runway: 6 },
-        },
-      });
+    // 2. Check/create demo startup (columns: userId, name, sector, phase are NOT NULL)
+    const startupCheckRes = await fetch(
+      SUPABASE_URL + "/rest/v1/Startup?userId=eq." + userId + "&select=id",
+      { headers }
+    );
+    const existingStartups = await startupCheckRes.json();
 
-      // Create demo outcome
-      await db.outcome.create({
-        data: {
-          startupId: startup.id,
-          status: "growing",
-          metrics: { mrr: 2500, users: 150, growth_rate: 0.15 },
-          keyFactors: ["product_market_fit", "strong_team", "plg_strategy"],
-        },
+    if (!existingStartups || existingStartups.length === 0) {
+      await fetch(SUPABASE_URL + "/rest/v1/Startup", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          userId: userId,
+          name: "TechFlow",
+          description: "AI-powered workflow automation for startups",
+          sector: "SaaS",
+          phase: "idea",
+        }),
       });
     }
 
-    // Set a simple demo cookie (bypass NextAuth for demo)
-    const response = NextResponse.json({ success: true, userId: user.id });
-    response.cookies.set("demo_user", user.id, {
+    // 3. Set session cookie
+    const response = NextResponse.json({ ok: true, redirect: "/dashboard" });
+    response.cookies.set("demo_user_id", userId, {
       httpOnly: true,
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60 * 60 * 24 * 7,
+      path: "/",
+    });
+    response.cookies.set("demo_mode", "true", {
+      httpOnly: false,
+      maxAge: 60 * 60 * 24 * 7,
       path: "/",
     });
 
     return response;
-  } catch (error) {
-    console.error("Demo setup error:", error);
-    return NextResponse.json({ error: "Demo setup failed" }, { status: 500 });
+  } catch (err) {
+    console.error("Demo setup error:", err);
+    return NextResponse.json(
+      { error: "Errore interno", details: String(err) },
+      { status: 500 }
+    );
   }
 }

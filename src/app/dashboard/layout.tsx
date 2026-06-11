@@ -20,9 +20,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [demoUser, setDemoUser] = useState<any>(null);
 
   useEffect(() => {
-    // Check for demo cookie
-    const demoCookie = document.cookie.split("; ").find(c => c.startsWith("demo_user="));
-    if (demoCookie) {
+    const cookies = document.cookie.split("; ");
+    const demoUserId = cookies.find(c => c.startsWith("demo_user_id="));
+    const demoMode = cookies.find(c => c.startsWith("demo_mode="));
+    
+    if (demoUserId || demoMode) {
       setDemoUser({ name: "Demo Founder", email: "demo@agentfoundry.ai" });
       setLoading(false);
     } else {
@@ -64,8 +66,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
           <button
             onClick={() => {
-              document.cookie = "demo_user=; max-age=0; path=/";
-              router.push("/login");
+              document.cookie = "demo_user_id=; max-age=0; path=/";
+              document.cookie = "demo_mode=; max-age=0; path=/";
+              window.location.href = "/login";
             }}
             className="w-full mt-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition"
           >

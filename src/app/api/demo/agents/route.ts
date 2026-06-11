@@ -1,23 +1,59 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
-import { cookies } from "next/headers";
+
+const SUPABASE_URL = process.env.SUPABASE_URL || "";
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+const DEFAULT_AGENTS = [
+  { type: "strategy", name: "Strategy Agent", isActive: true },
+  { type: "tech", name: "Tech Agent", isActive: true },
+  { type: "finance", name: "Finance Agent", isActive: true },
+  { type: "marketing", name: "Marketing Agent", isActive: false },
+  { type: "legal", name: "Legal Agent", isActive: false },
+  { type: "operations", name: "Operations Agent", isActive: false },
+];
 
 export async function GET() {
   try {
-    const cookieStore = cookies();
-    const demoUserId = cookieStore.get("demo_user")?.value;
-    if (!demoUserId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+      return NextResponse.json(DEFAULT_AGENTS.map((a, i) => ({ id: "default-" + i, ...a })));
+    }
 
-    const startup = await db.startup.findFirst({
-      where: { userId: demoUserId },
-      include: { agentConfigs: true },
-    });
+    const headers = {
+      "apikey": SUPABASE_SERVICE_KEY,
+      "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
+    };
 
-    if (!startup) return NextResponse.json([]);
+    // Get demo user
+    const userRes = await fetch(
+      SUPABASE_URL + "/rest/v1/User?email=eq.demo@agentfoundry.ai&select=id",
+      { headers }
+    );
+    const users = await userRes.json();
+    if (!users || users.length === 0) {
+      return NextResponse.json(DEFAULT_AGENTS.map((a, i) => ({ id: "default-" + i, ...a })));
+    }
+    const userId = users[0].id;
 
-    return NextResponse.json(startup.agentConfigs);
-  } catch (error) {
-    console.error("Get demo agents error:", error);
-    return NextResponse.json({ error: "Failed" }, { status: 500 });
+    // Get agent configs
+    const agentsRes = await fetch(
+      SUPABASE_URL + "/rest/v1/AgentConfig?userId=eq." + userId + "&select=id,type,name,isActive",
+      { headers }
+    );
+    let agents = [];
+    try {
+      agents = await agentsRes.json();
+    } catch (e) {
+      // ignore
+    }
+
+    if (Array.isArray(agents) && agents.length > 0) {
+      return NextResponse.json(agents);
+    }
+
+    // No agents in DB - return defaults
+    return NextResponse.json(DEFAULT_AGENTS.map((a, i) => ({ id: "default-" + i, ...a })));
+  } catch (err) {
+    console.error("Demo agents error:", err);
+    return NextResponse.json(DEFAULT_AGENTS.map((a, i) => ({ id: "default-" + i, ...a })));
   }
 }
