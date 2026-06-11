@@ -136,16 +136,16 @@ model Pattern {
   description String   @db.Text
   sector      String?
   phase       String?
-  conditions  Json
-  successRate Float
-  sampleSize  Int
-  confidence  Float
-  keyFactors  String[]
-  failureModes String[]
+  conditions  Json     @default("{}")
+  successRate Float    @default(0)
+  sampleSize  Int      @default(0)
+  confidence  Float    @default(0)
+  keyFactors  String[] @default([])
+  failureModes String[] @default([])
   avgTimeToOutcome String?
   isActive    Boolean  @default(true)
   extractedBy String   @default("hermes_cron")
-  playbooks   Playbook[]
+  recommendations Recommendation[]
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   @@index([sector, phase])
@@ -158,10 +158,9 @@ model Playbook {
   description String   @db.Text
   sector      String?
   phase       String?
-  conditions  Json
-  steps       Json
-  patternId   String?
-  pattern     Pattern? @relation(fields: [patternId], references: [id])
+  conditions  Json     @default("{}")
+  steps       Json     @default("[]")
+  patternIds  String[] @default([])
   successRate Float    @default(0)
   timesUsed   Int      @default(0)
   isActive    Boolean  @default(true)
