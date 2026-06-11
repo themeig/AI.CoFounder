@@ -7,24 +7,21 @@ export default function StartupPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/startup")
+    fetch("/api/demo/startup")
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          setStartup(data[0]);
-        }
+        if (Array.isArray(data) && data.length > 0) setStartup(data[0]);
         setLoading(false);
       })
       .catch(() => setLoading(false));
   }, []);
 
   if (loading) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
-  if (!startup) return <div className="p-8 text-center text-muted-foreground">No startup found. <a href="/onboarding" className="text-primary">Create one</a></div>;
+  if (!startup) return <div className="p-8 text-center text-muted-foreground">No startup found.</div>;
 
   return (
     <div className="p-8 max-w-3xl">
       <h1 className="text-3xl font-bold mb-6">Startup Profile</h1>
-      
       <div className="space-y-6">
         <div className="p-6 rounded-xl bg-card border border-border">
           <h2 className="text-lg font-semibold mb-4">Basic Info</h2>
@@ -36,11 +33,8 @@ export default function StartupPage() {
             <div><label className="text-sm text-muted-foreground">Team Size</label><p className="font-medium">{startup.teamSize}</p></div>
             <div><label className="text-sm text-muted-foreground">Website</label><p className="font-medium">{startup.website || "—"}</p></div>
           </div>
-          {startup.description && (
-            <div className="mt-4"><label className="text-sm text-muted-foreground">Description</label><p className="mt-1">{startup.description}</p></div>
-          )}
+          {startup.description && <div className="mt-4"><label className="text-sm text-muted-foreground">Description</label><p className="mt-1">{startup.description}</p></div>}
         </div>
-
         <div className="p-6 rounded-xl bg-card border border-border">
           <h2 className="text-lg font-semibold mb-4">Metrics</h2>
           <div className="grid grid-cols-2 gap-4">
@@ -50,7 +44,6 @@ export default function StartupPage() {
             <div><label className="text-sm text-muted-foreground">Runway</label><p className="text-2xl font-bold">{startup.runway || 0} months</p></div>
           </div>
         </div>
-
         <div className="p-6 rounded-xl bg-card border border-border">
           <h2 className="text-lg font-semibold mb-4">Active Agents</h2>
           <div className="grid grid-cols-3 gap-3">

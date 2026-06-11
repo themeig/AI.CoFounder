@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSession } from "next-auth/react";
 
 interface Agent {
   id: string;
@@ -17,11 +16,19 @@ interface Message {
 }
 
 const AGENT_ICONS: Record<string, string> = {
-  strategy: "🧠", tech: "💻", finance: "📊", marketing: "📣", legal: "⚖️", operations: "🤝",
+  strategy: "🧠", tech: "💻", finance: "📊", marketing: "📣", legal: "⚖️", operations: "🤖",
+};
+
+const AGENT_DESCRIPTIONS: Record<string, string> = {
+  strategy: "Analyzes markets, competitors, and opportunities. Suggests the best growth strategy for your startup.",
+  tech: "Writes code, configures infrastructure, does code reviews. Your AI CTO.",
+  finance: "Cash flow management, financial projections, fundraising preparation and pitch deck.",
+  marketing: "Creates campaigns, content, copy, and acquisition strategies for every channel.",
+  legal: "Terms of service, NDAs, contracts, compliance. A solid legal foundation.",
+  operations: "Automates workflows, team management, project management, repetitive processes.",
 };
 
 export default function AgentsPage() {
-  const { data: session } = useSession();
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -30,13 +37,12 @@ export default function AgentsPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    fetch("/api/startup")
+    fetch("/api/demo/agents")
       .then((res) => res.json())
       .then((data) => {
-        if (Array.isArray(data) && data.length > 0) {
-          const startup = data[0];
-          setAgents(startup.agentConfigs || []);
-          const active = startup.agentConfigs?.find((a: Agent) => a.isActive);
+        if (Array.isArray(data)) {
+          setAgents(data);
+          const active = data.find((a: Agent) => a.isActive);
           if (active) setSelectedAgent(active);
         }
       })
@@ -52,17 +58,18 @@ export default function AgentsPage() {
 
     const userMessage: Message = { id: Date.now().toString(), role: "user", content: input };
     setMessages((prev) => [...prev, userMessage]);
+    const currentInput = input;
     setInput("");
     setLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const res = await fetch("/api/demo/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           agentId: selectedAgent.id,
           agentType: selectedAgent.type,
-          message: input,
+          message: currentInput,
         }),
       });
 
@@ -74,21 +81,24 @@ export default function AgentsPage() {
       };
       setMessages((prev) => [...prev, assistantMessage]);
     } catch {
-      setMessages((prev) => [...prev, { id: (Date.now() + 1).toString(), role: "assistant", content: "Sorry, something went wrong. Please try again." }]);
+      setMessages((prev) => [...prev, {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: "Sorry, something went wrong. Please try again.",
+      }]);
     }
     setLoading(false);
   };
 
   return (
     <div className="h-screen flex">
-      {/* Agent list */}
       <div className="w-72 border-r border-border bg-card p-4 flex flex-col">
         <h2 className="text-lg font-bold mb-4">Your Agents</h2>
         <div className="space-y-2 flex-1">
           {agents.map((agent) => (
             <button
               key={agent.id}
-              onClick={() => setSelectedAgent(agent)}
+              onClick={() => { setSelectedAgent(agent); setMessages([]); }}
               className={`w-full flex items-center gap-3 px-3 py-3 rounded-lg text-left transition ${
                 selectedAgent?.id === agent.id ? "bg-primary/10 border border-primary/30" : "hover:bg-secondary border border-transparent"
               }`}
@@ -104,26 +114,24 @@ export default function AgentsPage() {
         </div>
       </div>
 
-      {/* Chat area */}
       <div className="flex-1 flex flex-col">
         {selectedAgent ? (
           <>
-            {/* Chat header */}
             <div className="px-6 py-4 border-b border-border flex items-center gap-3">
               <span className="text-2xl">{AGENT_ICONS[selectedAgent.type]}</span>
               <div>
                 <h3 className="font-semibold">{selectedAgent.name}</h3>
-                <p className="text-xs text-muted-foreground">AI-powered startup advisor</p>
+                <p className="text-xs text-muted-foreground">{AGENT_DESCRIPTIONS[selectedAgent.type]}</p>
               </div>
             </div>
 
-            {/* Messages */}
             <div className="flex-1 overflow-y-auto p-6 space-y-4">
               {messages.length === 0 && (
                 <div className="text-center text-muted-foreground py-12">
                   <p className="text-4xl mb-4">{AGENT_ICONS[selectedAgent.type]}</p>
-                  <p className="text-lg font-medium mb-2">Hi! I'm your {selectedAgent.name}</p>
-                  <p className="text-sm">Ask me anything about your startup. I have access to patterns from thousands of successful startups.</p>
+                  <p className="text-lg font-medium mb-2">Hi! I\'m your {selectedAgent.name}</p>
+                  <p className="text-sm max-w-md mx-auto">{AGENT_DESCRIPTIONS[selectedAgent.type]}</p>
+                  <p className="text-sm mt-4 text-muted-foreground">Ask me anything about your startup. I have access to patterns from thousands of successful startups.</p>
                 </div>
               )}
               {messages.map((msg) => (
@@ -145,7 +153,6 @@ export default function AgentsPage() {
               <div ref={messagesEndRef} />
             </div>
 
-            {/* Input */}
             <div className="px-6 py-4 border-t border-border">
               <div className="flex gap-3">
                 <input

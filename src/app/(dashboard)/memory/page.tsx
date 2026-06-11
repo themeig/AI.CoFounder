@@ -3,27 +3,14 @@
 import { useEffect, useState } from "react";
 
 interface Pattern {
-  id: string;
-  title: string;
-  description: string;
-  sector: string | null;
-  phase: string | null;
-  successRate: number;
-  sampleSize: number;
-  confidence: number;
-  keyFactors: string[];
-  failureModes: string[];
-  avgTimeToOutcome: string | null;
+  id: string; title: string; description: string; sector: string | null;
+  phase: string | null; successRate: number; sampleSize: number; confidence: number;
+  keyFactors: string[]; failureModes: string[]; avgTimeToOutcome: string | null;
 }
 
 interface Playbook {
-  id: string;
-  title: string;
-  description: string;
-  sector: string | null;
-  phase: string | null;
-  steps: any[];
-  successRate: number;
+  id: string; title: string; description: string; sector: string | null;
+  phase: string | null; steps: any[]; successRate: number;
 }
 
 export default function MemoryPage() {
@@ -63,6 +50,7 @@ export default function MemoryPage() {
 
       {tab === "patterns" && (
         <div className="grid gap-4">
+          {patterns.length === 0 && <p className="text-muted-foreground">No patterns found. Make sure the database is set up.</p>}
           {patterns.map((p) => (
             <div key={p.id} className="p-6 rounded-xl bg-card border border-border">
               <div className="flex items-start justify-between mb-3">
@@ -84,10 +72,17 @@ export default function MemoryPage() {
                 <span className="text-muted-foreground">Confidence: <strong className="text-foreground">{(p.confidence * 100).toFixed(0)}%</strong></span>
                 {p.avgTimeToOutcome && <span className="text-muted-foreground">Avg time: <strong className="text-foreground">{p.avgTimeToOutcome}</strong></span>}
               </div>
-              {p.keyFactors.length > 0 && (
+              {p.keyFactors && p.keyFactors.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-1">
-                  {p.keyFactors.map((f, i) => (
-                    <span key={i} className="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400">{f}</span>
+                  {p.keyFactors.map((factor, i) => (
+                    <span key={i} className="px-2 py-0.5 rounded text-xs bg-green-500/10 text-green-400">{factor}</span>
+                  ))}
+                </div>
+              )}
+              {p.failureModes && p.failureModes.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-1">
+                  {p.failureModes.map((mode, i) => (
+                    <span key={i} className="px-2 py-0.5 rounded text-xs bg-red-500/10 text-red-400">{mode}</span>
                   ))}
                 </div>
               )}
@@ -98,6 +93,7 @@ export default function MemoryPage() {
 
       {tab === "playbooks" && (
         <div className="grid gap-4">
+          {playbooks.length === 0 && <p className="text-muted-foreground">No playbooks found.</p>}
           {playbooks.map((pb) => (
             <div key={pb.id} className="p-6 rounded-xl bg-card border border-border">
               <div className="flex items-start justify-between mb-3">

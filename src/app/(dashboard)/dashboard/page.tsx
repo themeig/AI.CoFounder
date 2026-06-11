@@ -1,9 +1,7 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { db } from "@/lib/db";
 
 interface Startup {
   id: string;
@@ -12,16 +10,17 @@ interface Startup {
   phase: string;
   mrr: number;
   users: number;
+  burnRate: number;
+  runway: number;
   agentConfigs: { id: string; type: string; name: string; isActive: boolean }[];
 }
 
 export default function DashboardPage() {
-  const { data: session } = useSession();
   const [startups, setStartups] = useState<Startup[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/startup")
+    fetch("/api/demo/startup")
       .then((res) => res.json())
       .then((data) => {
         setStartups(Array.isArray(data) ? data : []);
@@ -37,10 +36,10 @@ export default function DashboardPage() {
   if (startups.length === 0) {
     return (
       <div className="p-8">
-        <h1 className="text-3xl font-bold mb-2">Welcome, {session?.user?.name}!</h1>
-        <p className="text-muted-foreground mb-8">Get started by creating your first startup profile.</p>
-        <Link href="/onboarding" className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition inline-block">
-          Create Startup Profile
+        <h1 className="text-3xl font-bold mb-2">Welcome!</h1>
+        <p className="text-muted-foreground mb-8">No startup found. Something went wrong with demo setup.</p>
+        <Link href="/login" className="px-6 py-3 rounded-lg bg-primary text-primary-foreground font-semibold hover:opacity-90 transition inline-block">
+          Try Again
         </Link>
       </div>
     );
@@ -57,11 +56,10 @@ export default function DashboardPage() {
           <p className="text-muted-foreground">{startup.sector.toUpperCase()} • {startup.phase.toUpperCase()}</p>
         </div>
         <Link href="/dashboard/agents" className="px-4 py-2 rounded-lg bg-primary text-primary-foreground font-medium hover:opacity-90 transition">
-          Open Chat →
+          Open Chat
         </Link>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-4 gap-4 mb-8">
         <div className="p-4 rounded-xl bg-card border border-border">
           <p className="text-sm text-muted-foreground">MRR</p>
@@ -76,12 +74,11 @@ export default function DashboardPage() {
           <p className="text-2xl font-bold">{activeAgents.length}</p>
         </div>
         <div className="p-4 rounded-xl bg-card border border-border">
-          <p className="text-sm text-muted-foreground">Phase</p>
-          <p className="text-2xl font-bold">{startup.phase.toUpperCase()}</p>
+          <p className="text-sm text-muted-foreground">Runway</p>
+          <p className="text-2xl font-bold">{startup.runway} months</p>
         </div>
       </div>
 
-      {/* Quick Actions */}
       <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
       <div className="grid grid-cols-3 gap-4">
         <Link href="/dashboard/agents" className="p-6 rounded-xl bg-card border border-border hover:border-primary/50 transition">

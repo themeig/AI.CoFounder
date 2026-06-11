@@ -1,8 +1,7 @@
 "use client";
 
-import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -15,25 +14,30 @@ const navItems = [
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const { data: session, status } = useSession();
   const router = useRouter();
   const pathname = usePathname();
+  const [loading, setLoading] = useState(true);
+  const [demoUser, setDemoUser] = useState<any>(null);
 
   useEffect(() => {
-    if (status === "unauthenticated") {
+    // Check for demo cookie
+    const demoCookie = document.cookie.split("; ").find(c => c.startsWith("demo_user="));
+    if (demoCookie) {
+      setDemoUser({ name: "Demo Founder", email: "demo@agentfoundry.ai" });
+      setLoading(false);
+    } else {
       router.push("/login");
     }
-  }, [status, router]);
+  }, [router]);
 
-  if (status === "loading") {
+  if (loading) {
     return <div className="min-h-screen flex items-center justify-center bg-background"><div className="text-lg">Loading...</div></div>;
   }
 
-  if (!session) return null;
+  if (!demoUser) return null;
 
   return (
     <div className="min-h-screen bg-background flex">
-      {/* Sidebar */}
       <aside className="w-64 border-r border-border bg-card p-4 flex flex-col">
         <div className="text-xl font-bold text-gradient mb-8 px-2">AI.CoFounder</div>
         <nav className="flex-1 space-y-1">
@@ -52,21 +56,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </nav>
         <div className="pt-4 border-t border-border">
           <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold">
-              {session.user?.name?.[0] || "U"}
-            </div>
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center text-sm font-bold">D</div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{session.user?.name}</p>
-              <p className="text-xs text-muted-foreground truncate">{session.user?.email}</p>
+              <p className="text-sm font-medium truncate">{demoUser.name}</p>
+              <p className="text-xs text-muted-foreground truncate">{demoUser.email}</p>
             </div>
           </div>
+          <button
+            onClick={() => {
+              document.cookie = "demo_user=; max-age=0; path=/";
+              router.push("/login");
+            }}
+            className="w-full mt-2 px-3 py-2 text-sm text-muted-foreground hover:text-foreground transition"
+          >
+            Sign Out
+          </button>
         </div>
       </aside>
-
-      {/* Main content */}
-      <main className="flex-1 overflow-auto">
-        {children}
-      </main>
+      <main className="flex-1 overflow-auto">{children}</main>
     </div>
   );
 }
