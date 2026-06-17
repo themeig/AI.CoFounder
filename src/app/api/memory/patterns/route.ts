@@ -15,7 +15,7 @@ export async function GET() {
     };
 
     const res = await fetch(
-      SUPABASE_URL + "/rest/v1/Pattern?select=*&order=successRate.desc&limit=20",
+      SUPABASE_URL + "/rest/v1/Pattern?select=*&order=createdAt.desc&limit=50",
       { headers }
     );
     const data = await res.json();
