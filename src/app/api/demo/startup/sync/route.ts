@@ -33,7 +33,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing database configurations" }, { status: 500 });
     }
 
-    const { stripeUrl, mixpanelUrl, plaidUrl } = await req.json();
+    const { stripeUrl, mixpanelUrl, plaidUrl, stripeConnType, stripeKey } = await req.json();
 
     logs.push(`[${new Date().toLocaleTimeString()}] Avvio sincronizzazione metriche API...`);
 
@@ -58,8 +58,88 @@ export async function POST(req: Request) {
     let newRunway = startup.runway;
 
     // 3. Sync Stripe
-    if (stripeUrl) {
-      logs.push(`[${new Date().toLocaleTimeString()}] Connessione a Stripe API (${stripeUrl})...`);
+    if (stripeConnType === "direct" && stripeKey) {
+      logs.push(`[${new Date().toLocaleTimeString()}] Avvio connessione diretta all'API ufficiale di Stripe...`);
+      try {
+        let subscriptionsData: any = null;
+        
+        if (stripeKey === "sk_test_demo") {
+          logs.push(`[${new Date().toLocaleTimeString()}] Rilevata chiave Sandbox. Generazione dati Stripe simulati...`);
+          const variation = 1 + (Math.random() * 0.04 - 0.02);
+          subscriptionsData = {
+            data: [
+              {
+                id: "sub_1",
+                items: {
+                  data: [
+                    { plan: { amount: 9900, interval: "month" }, quantity: Math.round(80 * variation) }
+                  ]
+                }
+              },
+              {
+                id: "sub_2",
+                items: {
+                  data: [
+                    { plan: { amount: 19900, interval: "month" }, quantity: Math.round(30 * variation) }
+                  ]
+                }
+              },
+              {
+                id: "sub_3",
+                items: {
+                  data: [
+                    { plan: { amount: 120000, interval: "year" }, quantity: Math.round(10 * variation) }
+                  ]
+                }
+              }
+            ]
+          };
+        } else {
+          logs.push(`[${new Date().toLocaleTimeString()}] Connessione a https://api.stripe.com/v1/subscriptions...`);
+          const res = await fetch("https://api.stripe.com/v1/subscriptions?status=active&limit=100", {
+            headers: {
+              "Authorization": `Bearer ${stripeKey}`,
+            }
+          });
+          if (!res.ok) {
+            const errorText = await res.text();
+            throw new Error(`Stripe API error: ${res.status} - ${errorText}`);
+          }
+          subscriptionsData = await res.json();
+        }
+
+        if (subscriptionsData && Array.isArray(subscriptionsData.data)) {
+          let mrrCents = 0;
+          let payingCustomers = 0;
+          
+          for (const sub of subscriptionsData.data) {
+            payingCustomers++;
+            const items = sub.items?.data || [];
+            for (const item of items) {
+              const amount = item.plan?.amount || 0;
+              const quantity = item.quantity || 1;
+              const interval = item.plan?.interval || "month";
+              let itemMrr = amount * quantity;
+              
+              if (interval === "year") {
+                itemMrr = Math.round(itemMrr / 12);
+              } else if (interval === "week") {
+                itemMrr = Math.round(itemMrr * 4.33);
+              }
+              mrrCents += itemMrr;
+            }
+          }
+          
+          newMrr = Math.round(mrrCents / 100);
+          newUsers = payingCustomers;
+          
+          logs.push(`[${new Date().toLocaleTimeString()}] Stripe Direct: Estratto con successo MRR ($${newMrr.toLocaleString()}) e ${newUsers} clienti paganti.`);
+        }
+      } catch (err: any) {
+        logs.push(`[${new Date().toLocaleTimeString()}] Stripe Direct Errore: ${err.message}`);
+      }
+    } else if (stripeUrl) {
+      logs.push(`[${new Date().toLocaleTimeString()}] Connessione a Stripe Proxy API (${stripeUrl})...`);
       try {
         const res = await fetch(stripeUrl);
         if (!res.ok) throw new Error(`Stato risposta ${res.status}`);
@@ -67,14 +147,14 @@ export async function POST(req: Request) {
         
         if (typeof data.mrr === "number") {
           newMrr = data.mrr;
-          logs.push(`[${new Date().toLocaleTimeString()}] Stripe Sync: MRR estratto con successo ($${newMrr.toLocaleString()})`);
+          logs.push(`[${new Date().toLocaleTimeString()}] Stripe Proxy: MRR estratto ($${newMrr.toLocaleString()})`);
         }
         if (typeof data.users === "number") {
           newUsers = data.users;
-          logs.push(`[${new Date().toLocaleTimeString()}] Stripe Sync: Utenti registrati estratti (${newUsers})`);
+          logs.push(`[${new Date().toLocaleTimeString()}] Stripe Proxy: Utenti registrati estratti (${newUsers})`);
         }
       } catch (err: any) {
-        logs.push(`[${new Date().toLocaleTimeString()}] Stripe Sync Errore: ${err.message}`);
+        logs.push(`[${new Date().toLocaleTimeString()}] Stripe Proxy Errore: ${err.message}`);
       }
     }
 

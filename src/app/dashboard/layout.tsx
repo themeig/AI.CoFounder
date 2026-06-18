@@ -53,11 +53,26 @@ const navItems = [
   },
 ];
 
+interface CofounderMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: string;
+  tools?: { name: string; success: boolean; details: string }[];
+}
+
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [demoUser, setDemoUser] = useState<any>(null);
+
+  // ── coFounder Assistant ──────────────────────────────────────────
+  const [showCofounder, setShowCofounder] = useState(false);
+  const [cofounderName, setCofounderName] = useState("coFounder");
+  const [cofounderInput, setCofounderInput] = useState("");
+  const [cofounderMessages, setCofounderMessages] = useState<CofounderMessage[]>([]);
+  const [cofounderLoading, setCofounderLoading] = useState(false);
+  const cofounderChatEndRef = useRef<HTMLDivElement>(null);
 
   // ── Sidebar collapse & resize ────────────────────────────────────
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -84,6 +99,113 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       setSidebarWidth(200);
     }
   }, []);
+
+  // Load coFounder settings and chat
+  useEffect(() => {
+    const checkSettings = () => {
+      const stored = localStorage.getItem("agentfoundry_settings");
+      if (stored) {
+        try {
+          const parsed = JSON.parse(stored);
+          if (parsed.cofounderName) setCofounderName(parsed.cofounderName);
+        } catch {}
+      }
+    };
+    checkSettings();
+    window.addEventListener("storage", checkSettings);
+    const interval = setInterval(checkSettings, 1000);
+    return () => {
+      window.removeEventListener("storage", checkSettings);
+      clearInterval(interval);
+    };
+  }, []);
+
+  useEffect(() => {
+    const storedChat = sessionStorage.getItem("agentfoundry_cofounder_chat");
+    if (storedChat) {
+      try {
+        setCofounderMessages(JSON.parse(storedChat));
+      } catch {}
+    } else {
+      setCofounderMessages([
+        {
+          role: "assistant",
+          content: `Ciao! Sono il tuo ${cofounderName}, l'assistente co-fondatore del tuo progetto. Posso aiutarti a gestire il team, creare agenti o aggiornare le metriche della startup in tempo reale. Cosa facciamo oggi?`,
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        }
+      ]);
+    }
+  }, [cofounderName]);
+
+  useEffect(() => {
+    if (cofounderChatEndRef.current) {
+      cofounderChatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [cofounderMessages, cofounderLoading]);
+
+  const saveCofounderChat = (msgs: CofounderMessage[]) => {
+    sessionStorage.setItem("agentfoundry_cofounder_chat", JSON.stringify(msgs));
+  };
+
+  const handleSendCofounderMessage = async (e?: React.FormEvent, customText?: string) => {
+    if (e) e.preventDefault();
+    const textToSend = customText || cofounderInput;
+    if (!textToSend.trim() || cofounderLoading) return;
+
+    const userMsg: CofounderMessage = {
+      role: "user",
+      content: textToSend,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    const newMsgs = [...cofounderMessages, userMsg];
+    setCofounderMessages(newMsgs);
+    saveCofounderChat(newMsgs);
+    if (!customText) setCofounderInput("");
+    setCofounderLoading(true);
+
+    try {
+      const res = await fetch("/api/demo/cofounder/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: newMsgs.map(m => ({ role: m.role, content: m.content })),
+          cofounderName
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Errore di connessione");
+
+      const assistantMsg: CofounderMessage = {
+        role: "assistant",
+        content: data.content,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        tools: data.executedTools || []
+      };
+
+      const finalMsgs = [...newMsgs, assistantMsg];
+      setCofounderMessages(finalMsgs);
+      saveCofounderChat(finalMsgs);
+
+      // UX Integration Event dispatch: refresh other page components in real-time
+      if (data.executedTools && data.executedTools.length > 0) {
+        window.dispatchEvent(new Event("startup-metrics-updated"));
+        window.dispatchEvent(new Event("startup-agents-updated"));
+      }
+    } catch (err: any) {
+      const errMsg: CofounderMessage = {
+        role: "assistant",
+        content: `Scusa, ho riscontrato un errore: ${err.message}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      const finalMsgs = [...newMsgs, errMsg];
+      setCofounderMessages(finalMsgs);
+      saveCofounderChat(finalMsgs);
+    } finally {
+      setCofounderLoading(false);
+    }
+  };
 
   const toggleSidebar = () => {
     const next = !sidebarCollapsed;
@@ -384,6 +506,144 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <main className="flex-1 overflow-y-auto h-screen custom-scrollbar" style={{ background: "#F8F9FA" }}>
         {children}
       </main>
+
+      {/* ── coFounder Floating Button ─────────────────────────────── */}
+      <button
+        onClick={() => setShowCofounder(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-2xl transition-transform hover:scale-105 z-40 animate-bounce"
+        style={{
+          background: 'linear-gradient(135deg, #1A73E8, #34A853)',
+          boxShadow: '0 8px 24px rgba(26,115,232,0.3)',
+          animationDuration: '3s'
+        }}
+        title={`Apri ${cofounderName}`}
+      >
+        <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
+          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
+        </svg>
+        <span className="absolute inset-0 rounded-full bg-[#1A73E8] animate-ping opacity-25" style={{ animationDuration: '2s' }} />
+      </button>
+
+      {/* ── coFounder Slide-out Drawer ───────────────────────────── */}
+      {showCofounder && (
+        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+          <div
+            onClick={() => setShowCofounder(false)}
+            className="absolute inset-0 bg-black/20 backdrop-blur-xs transition-opacity"
+          />
+
+          <div
+            className="relative w-full max-w-sm bg-white h-full shadow-2xl flex flex-col z-10 border-l border-[#E8EAED] animate-slide-in"
+            style={{
+              background: 'rgba(255, 255, 255, 0.97)',
+              backdropFilter: 'blur(12px)'
+            }}
+          >
+            <div className="px-5 py-4 flex items-center justify-between border-b border-[#E8EAED]" style={{ background: '#F8F9FA' }}>
+              <div className="flex items-center gap-3">
+                <div
+                  className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white relative"
+                  style={{ background: 'linear-gradient(135deg, #1A73E8, #34A853)' }}
+                >
+                  CF
+                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#34A853] border-2 border-white" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-xs" style={{ color: '#202124' }}>{cofounderName}</h3>
+                  <p className="text-[10px]" style={{ color: '#9AA0AC' }}>Co-Founder Virtual Partner · Attivo</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCofounder(false)}
+                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-[#E8EAED] transition text-[#5F6368]"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar" style={{ background: '#FAFAFA' }}>
+              {cofounderMessages.map((msg, index) => (
+                <div key={index} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+                  <div
+                    className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed"
+                    style={{
+                      background: msg.role === 'user' ? '#E8F0FE' : '#FFFFFF',
+                      color: '#202124',
+                      border: msg.role === 'user' ? 'none' : '1px solid #E8EAED',
+                      boxShadow: msg.role === 'user' ? 'none' : '0 1px 2px rgba(60,64,67,0.05)'
+                    }}
+                  >
+                    <p className="whitespace-pre-wrap">{msg.content}</p>
+
+                    {msg.tools && msg.tools.length > 0 && (
+                      <div className="mt-2.5 pt-2 border-t border-[#F1F3F4] space-y-1.5 animate-fade-in">
+                        {msg.tools.map((t, i) => (
+                          <div key={i} className="flex items-center gap-1.5 text-[9px] font-semibold text-[#137333] bg-[#E6F4EA] px-2 py-1 rounded border border-[#CEEAD6]">
+                            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 flex-shrink-0"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                            <span>🔧 {t.details}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[8px] mt-1 px-1" style={{ color: '#9AA0AC' }}>{msg.timestamp}</span>
+                </div>
+              ))}
+
+              {cofounderLoading && (
+                <div className="flex flex-col items-start animate-fade-in">
+                  <div className="flex gap-1.5 items-center px-4 py-3 bg-white rounded-2xl border border-[#E8EAED]">
+                    <span className="w-2 h-2 bg-[#DADCE0] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-2 h-2 bg-[#DADCE0] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-2 h-2 bg-[#DADCE0] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </div>
+                </div>
+              )}
+              <div ref={cofounderChatEndRef} />
+            </div>
+
+            {cofounderMessages.length <= 1 && !cofounderLoading && (
+              <div className="px-4 py-2 flex flex-wrap gap-1.5 bg-[#FAFAFA]" style={{ borderTop: '1px solid #F1F3F4' }}>
+                {[
+                  "Crea agente Strategy",
+                  "Quali sono le metriche?",
+                  "Imposta MRR a 15000",
+                ].map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => handleSendCofounderMessage(undefined, s)}
+                    className="px-2.5 py-1 rounded-full text-[10px] font-semibold border border-[#E8EAED] hover:bg-[#F1F3F4] transition"
+                    style={{ color: '#5F6368', background: '#FFFFFF' }}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <form onSubmit={handleSendCofounderMessage} className="p-3 border-t border-[#E8EAED] flex items-center gap-2" style={{ background: '#FFFFFF' }}>
+              <input
+                type="text"
+                value={cofounderInput}
+                onChange={e => setCofounderInput(e.target.value)}
+                placeholder={`Scrivi a ${cofounderName}...`}
+                className="flex-1 px-3 py-2 rounded-xl text-xs bg-[#F8F9FA] border border-[#E8EAED] focus:outline-none"
+                style={{ color: '#202124' }}
+              />
+              <button
+                type="submit"
+                disabled={cofounderLoading || !cofounderInput.trim()}
+                className="w-8 h-8 rounded-xl flex items-center justify-center text-white transition disabled:opacity-40"
+                style={{ background: '#1A73E8' }}
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

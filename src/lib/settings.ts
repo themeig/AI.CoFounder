@@ -5,6 +5,9 @@ export interface AppSettings {
   // Modello LLM di default per tutti gli agenti
   defaultModel: string;
 
+  // Nome personalizzabile dell'assistente di piattaforma
+  cofounderName: string;
+
   // Impostazioni di memoria
   memorySettings: MemorySettings;
 
@@ -49,9 +52,10 @@ export interface KnowledgeSettings {
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
   defaultModel: 'openrouter/owl-alpha',
+  cofounderName: 'coFounder',
   memorySettings: {
     contextMessages: 20,
-    useLongTermMemory: false,  // Disabilitato per default (Mnemosyne ha bisogno di configurazione)
+    useLongTermMemory: true,  // Abilitato per default
     autoSaveInteractions: true,
     recencyBias: 0.5,
   },

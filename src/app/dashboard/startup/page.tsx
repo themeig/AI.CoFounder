@@ -28,6 +28,8 @@ export default function StartupPage() {
   const [mixpanelConnected, setMixpanelConnected] = useState(false);
   const [plaidConnected, setPlaidConnected] = useState(false);
 
+  const [stripeConnType, setStripeConnType] = useState("direct"); // "direct" or "proxy"
+  const [stripeKey, setStripeKey] = useState("sk_test_demo");
   const [stripeUrl, setStripeUrl] = useState("");
   const [mixpanelUrl, setMixpanelUrl] = useState("");
   const [plaidUrl, setPlaidUrl] = useState("");
@@ -39,8 +41,7 @@ export default function StartupPage() {
 
   const terminalEndRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    // Load startup data
+  const loadStartupData = () => {
     fetch("/api/demo/startup")
       .then((res) => res.json())
       .then((data) => {
@@ -48,6 +49,14 @@ export default function StartupPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  };
+
+  useEffect(() => {
+    loadStartupData();
+
+    // Listen to global layout coFounder updates
+    window.addEventListener("startup-metrics-updated", loadStartupData);
+    window.addEventListener("startup-agents-updated", loadStartupData);
 
     // Initialize Integration URLs from localStorage or Defaults
     const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
@@ -59,9 +68,17 @@ export default function StartupPage() {
     setMixpanelUrl(storedMixpanelUrl);
     setPlaidUrl(storedPlaidUrl);
 
+    setStripeConnType(localStorage.getItem("agentfoundry_integration_stripe_conn_type") || "direct");
+    setStripeKey(localStorage.getItem("agentfoundry_integration_stripe_key") || "sk_test_demo");
+
     setStripeConnected(localStorage.getItem("agentfoundry_integration_stripe_conn") === "true");
     setMixpanelConnected(localStorage.getItem("agentfoundry_integration_mixpanel_conn") === "true");
     setPlaidConnected(localStorage.getItem("agentfoundry_integration_plaid_conn") === "true");
+
+    return () => {
+      window.removeEventListener("startup-metrics-updated", loadStartupData);
+      window.removeEventListener("startup-agents-updated", loadStartupData);
+    };
   }, []);
 
   useEffect(() => {
@@ -92,6 +109,9 @@ export default function StartupPage() {
     localStorage.setItem("agentfoundry_integration_mixpanel_url", mixpanelUrl);
     localStorage.setItem("agentfoundry_integration_plaid_url", plaidUrl);
 
+    localStorage.setItem("agentfoundry_integration_stripe_conn_type", stripeConnType);
+    localStorage.setItem("agentfoundry_integration_stripe_key", stripeKey);
+
     localStorage.setItem("agentfoundry_integration_stripe_conn", String(stripeConnected));
     localStorage.setItem("agentfoundry_integration_mixpanel_conn", String(mixpanelConnected));
     localStorage.setItem("agentfoundry_integration_plaid_conn", String(plaidConnected));
@@ -113,6 +133,8 @@ export default function StartupPage() {
         stripeUrl: stripeConnected ? stripeUrl : null,
         mixpanelUrl: mixpanelConnected ? mixpanelUrl : null,
         plaidUrl: plaidConnected ? plaidUrl : null,
+        stripeConnType: stripeConnected ? stripeConnType : null,
+        stripeKey: stripeConnected ? stripeKey : null,
       };
 
       const res = await fetch("/api/demo/startup/sync", {
@@ -598,23 +620,56 @@ export default function StartupPage() {
                 {stripeConnected && (
                   <div className="space-y-3 mt-3 pt-3 border-t border-[#F1F3F4] animate-fade-in">
                     <div>
-                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>ENDPOINT URL (MRR & Utenti)</label>
-                      <input
-                        type="text"
-                        value={stripeUrl}
-                        onChange={e => setStripeUrl(e.target.value)}
+                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>TIPO DI CONNESSIONE</label>
+                      <select
+                        value={stripeConnType}
+                        onChange={e => setStripeConnType(e.target.value)}
                         className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
                         style={{ color: '#202124' }}
-                      />
+                      >
+                        <option value="direct">Diretta (Official Stripe API)</option>
+                        <option value="proxy">Proxy (Custom JSON Endpoint)</option>
+                      </select>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>STRIPE API MOCK KEY</label>
-                      <input
-                        type="password"
-                        placeholder="sk_test_••••••••••••••••••••"
-                        className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
-                      />
-                    </div>
+
+                    {stripeConnType === "direct" ? (
+                      <div>
+                        <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>STRIPE SECRET KEY (sk_live_... / sk_test_...)</label>
+                        <input
+                          type="password"
+                          value={stripeKey}
+                          onChange={e => setStripeKey(e.target.value)}
+                          placeholder="sk_test_••••••••••••••••••••"
+                          className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
+                          style={{ color: '#202124' }}
+                        />
+                        <p className="text-[9px] mt-1" style={{ color: '#9AA0AC' }}>Usa "sk_test_demo" per attivare la simulazione Sandbox</p>
+                      </div>
+                    ) : (
+                      <>
+                        <div>
+                          <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>ENDPOINT URL (MRR & Utenti)</label>
+                          <input
+                            type="text"
+                            value={stripeUrl}
+                            onChange={e => setStripeUrl(e.target.value)}
+                            className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
+                            style={{ color: '#202124' }}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>STRIPE API MOCK KEY</label>
+                          <input
+                            type="password"
+                            value={stripeKey}
+                            onChange={e => setStripeKey(e.target.value)}
+                            placeholder="sk_test_••••••••••••••••••••"
+                            className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
+                            style={{ color: '#202124' }}
+                          />
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
