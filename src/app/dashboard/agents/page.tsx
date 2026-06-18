@@ -344,11 +344,17 @@ export default function AgentsPage() {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const agentParamId = params.get('id');
+
     fetch('/api/demo/agents')
       .then(r => r.json())
       .then(data => {
         setAgentsList(data);
-        if (data.length > 0) setSelectedAgent(data[0].id);
+        if (data.length > 0) {
+          const target = data.find((a: any) => a.id === agentParamId);
+          setSelectedAgent(target ? target.id : data[0].id);
+        }
       })
       .catch(console.error);
   }, []);

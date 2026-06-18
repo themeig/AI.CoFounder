@@ -1,19 +1,46 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
+
+const AGENT_CONFIGS: Record<string, { color: string; gradient: string; label: string; desc: string }> = {
+  strategy:   { color: '#1A73E8', gradient: 'linear-gradient(135deg, #1A73E8, #4285F4)', label: 'Strategy', desc: 'Analisi mercato & crescita' },
+  tech:       { color: '#34A853', gradient: 'linear-gradient(135deg, #34A853, #0F9D58)', label: 'Tech', desc: 'Sviluppo & architettura' },
+  finance:    { color: '#F9AB00', gradient: 'linear-gradient(135deg, #F9AB00, #F4B400)', label: 'Finance', desc: 'Runway, MRR & budget' },
+  marketing:  { color: '#EA4335', gradient: 'linear-gradient(135deg, #EA4335, #DB4437)', label: 'Marketing', desc: 'Lead generation & SEO' },
+  legal:      { color: '#9334E6', gradient: 'linear-gradient(135deg, #9334E6, #A855F7)', label: 'Legal', desc: 'Società, contratti & GDPR' },
+  operations: { color: '#17A2B8', gradient: 'linear-gradient(135deg, #17A2B8, #00ACC1)', label: 'Ops', desc: 'Processi, ticket & automation' },
+};
 
 export default function StartupPage() {
   const [startup, setStartup] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
-  // Outcome/Pivot form state
+  // Form states
   const [status, setStatus] = useState("growing");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [analysis, setAnalysis] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Integration Configuration & Drawer states
+  const [showIntegrations, setShowIntegrations] = useState(false);
+  const [stripeConnected, setStripeConnected] = useState(false);
+  const [mixpanelConnected, setMixpanelConnected] = useState(false);
+  const [plaidConnected, setPlaidConnected] = useState(false);
+
+  const [stripeUrl, setStripeUrl] = useState("");
+  const [mixpanelUrl, setMixpanelUrl] = useState("");
+  const [plaidUrl, setPlaidUrl] = useState("");
+
+  // Terminal Logs states
+  const [syncing, setSyncing] = useState(false);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const [flashMetrics, setFlashMetrics] = useState(false);
+
+  const terminalEndRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
+    // Load startup data
     fetch("/api/demo/startup")
       .then((res) => res.json())
       .then((data) => {
@@ -21,7 +48,107 @@ export default function StartupPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    // Initialize Integration URLs from localStorage or Defaults
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+    const storedStripeUrl = localStorage.getItem("agentfoundry_integration_stripe_url") || `${origin}/api/demo/sandbox/metrics?provider=stripe`;
+    const storedMixpanelUrl = localStorage.getItem("agentfoundry_integration_mixpanel_url") || `${origin}/api/demo/sandbox/metrics?provider=mixpanel`;
+    const storedPlaidUrl = localStorage.getItem("agentfoundry_integration_plaid_url") || `${origin}/api/demo/sandbox/metrics?provider=plaid`;
+
+    setStripeUrl(storedStripeUrl);
+    setMixpanelUrl(storedMixpanelUrl);
+    setPlaidUrl(storedPlaidUrl);
+
+    setStripeConnected(localStorage.getItem("agentfoundry_integration_stripe_conn") === "true");
+    setMixpanelConnected(localStorage.getItem("agentfoundry_integration_mixpanel_conn") === "true");
+    setPlaidConnected(localStorage.getItem("agentfoundry_integration_plaid_conn") === "true");
   }, []);
+
+  useEffect(() => {
+    if (terminalEndRef.current) {
+      terminalEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [terminalLogs]);
+
+  const handleToggleAgent = async (agentId: string, currentStatus: boolean) => {
+    try {
+      const res = await fetch("/api/demo/agents", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: agentId, isActive: !currentStatus }),
+      });
+      if (!res.ok) throw new Error("Impossibile aggiornare l'agente");
+      
+      const startupRes = await fetch("/api/demo/startup");
+      const startupData = await startupRes.json();
+      if (Array.isArray(startupData) && startupData.length > 0) setStartup(startupData[0]);
+    } catch (err) {
+      console.error("Toggle agent error:", err);
+    }
+  };
+
+  const handleSaveIntegrations = () => {
+    localStorage.setItem("agentfoundry_integration_stripe_url", stripeUrl);
+    localStorage.setItem("agentfoundry_integration_mixpanel_url", mixpanelUrl);
+    localStorage.setItem("agentfoundry_integration_plaid_url", plaidUrl);
+
+    localStorage.setItem("agentfoundry_integration_stripe_conn", String(stripeConnected));
+    localStorage.setItem("agentfoundry_integration_mixpanel_conn", String(mixpanelConnected));
+    localStorage.setItem("agentfoundry_integration_plaid_conn", String(plaidConnected));
+
+    // Show a quick mock log when saved
+    setTerminalLogs((prev) => [
+      ...prev,
+      `[${new Date().toLocaleTimeString()}] Configurazione integrazioni salvata localmente.`
+    ]);
+  };
+
+  const handleSyncNow = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    setTerminalLogs([`[${new Date().toLocaleTimeString()}] Avvio connessione socket e inizializzazione handshake...`]);
+
+    try {
+      const payload = {
+        stripeUrl: stripeConnected ? stripeUrl : null,
+        mixpanelUrl: mixpanelConnected ? mixpanelUrl : null,
+        plaidUrl: plaidConnected ? plaidUrl : null,
+      };
+
+      const res = await fetch("/api/demo/startup/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Sincronizzazione fallita");
+
+      // Typewriter effect to display server-side logs line by line
+      let currentLine = 0;
+      const interval = setInterval(() => {
+        if (currentLine < data.logs.length) {
+          setTerminalLogs((prev) => [...prev, data.logs[currentLine]]);
+          currentLine++;
+        } else {
+          clearInterval(interval);
+          setSyncing(false);
+          if (data.startup) {
+            setStartup(data.startup);
+            setFlashMetrics(true);
+            setTimeout(() => setFlashMetrics(false), 1500);
+          }
+        }
+      }, 250);
+    } catch (err: any) {
+      setTerminalLogs((prev) => [
+        ...prev,
+        `[${new Date().toLocaleTimeString()}] ERRORE: ${err.message}`,
+        `[${new Date().toLocaleTimeString()}] Sincronizzazione interrotta.`
+      ]);
+      setSyncing(false);
+    }
+  };
 
   const handleSubmitOutcome = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,26 +156,19 @@ export default function StartupPage() {
     setSubmitting(true);
     setError(null);
     setAnalysis(null);
-
     try {
       const res = await fetch("/api/demo/startup/outcome", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status, notes }),
       });
-
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Errore durante l'analisi");
-      
       setAnalysis(data.analysis);
       setNotes("");
-
-      // Refresh startup info
       const startupRes = await fetch("/api/demo/startup");
       const startupData = await startupRes.json();
-      if (Array.isArray(startupData) && startupData.length > 0) {
-        setStartup(startupData[0]);
-      }
+      if (Array.isArray(startupData) && startupData.length > 0) setStartup(startupData[0]);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -56,130 +176,255 @@ export default function StartupPage() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center text-muted-foreground">Loading...</div>;
-  if (!startup) return <div className="p-8 text-center text-muted-foreground">No startup found.</div>;
+  if (loading) return (
+    <div className="flex items-center justify-center min-h-screen" style={{ background: '#F8F9FA' }}>
+      <div className="w-8 h-8 rounded-full border-2 border-[#1A73E8] border-t-transparent animate-spin" />
+    </div>
+  );
+
+  if (!startup) return (
+    <div className="p-8 text-center text-sm" style={{ color: '#5F6368' }}>Nessuna startup trovata.</div>
+  );
+
+  // Synergy Score Calculations
+  const activeAgents = startup.agentConfigs?.filter((a: any) => a.isActive) || [];
+  const activeTypes = new Set(activeAgents.map((a: any) => a.type));
+  const activeCount = activeTypes.size;
+  const synergyScore = Math.round((activeCount / 6) * 100);
+
+  // SVG Gauge calculations
+  const strokeDash = 251.2; // 2 * PI * r (r=40)
+  const strokeOffset = strokeDash - (strokeDash * synergyScore) / 100;
 
   return (
-    <div className="p-8 max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-8 max-w-6xl mx-auto space-y-6 animate-fade-in" style={{ background: '#F8F9FA' }}>
+      
+      {/* Glow Style override */}
+      <style>{`
+        @keyframes metric-flash-glow {
+          0% { background-color: rgba(52, 168, 83, 0.15); border-color: #34A853; box-shadow: 0 0 12px rgba(52, 168, 83, 0.3); }
+          100% { background-color: #FFFFFF; border-color: #E8EAED; box-shadow: 0 1px 2px rgba(60,64,67,0.10); }
+        }
+        .flash-active {
+          animation: metric-flash-glow 1.5s ease-out;
+        }
+        .custom-switch:checked ~ .switch-dot {
+          transform: translateX(14px);
+          background-color: #FFFFFF;
+        }
+        .custom-switch:checked {
+          background-color: #34A853;
+        }
+      `}</style>
+
+      {/* Header Banner */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-6 rounded-2xl border border-[#E8EAED]" style={{ background: '#FFFFFF', boxShadow: '0 1px 2px rgba(60,64,67,0.05)' }}>
         <div>
-          <h1 className="text-3xl font-bold text-white">Startup Profile</h1>
-          <p className="text-gray-500 mt-1">Gestisci le metriche e analizza i pivot della tua startup.</p>
+          <div className="flex items-center gap-2 mb-2">
+            <span className="px-2.5 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider" style={{ background: '#E8F0FE', color: '#1A73E8' }}>
+              {startup.sector?.toUpperCase() || "SaaS"}
+            </span>
+            <span className="px-2.5 py-0.5 text-[10px] font-bold rounded-full uppercase tracking-wider" style={{ background: '#E6F4EA', color: '#34A853' }}>
+              {startup.phase?.toUpperCase() || "Pre-Seed"}
+            </span>
+          </div>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: '#202124' }}>
+            {startup.name || 'Startup Workspace'}
+          </h1>
+          <p className="text-sm mt-1" style={{ color: '#5F6368' }}>
+            Gestisci le metriche, monitora le API in tempo reale e coordina il tuo team di agenti AI.
+          </p>
         </div>
+        <button
+          onClick={() => setShowIntegrations(true)}
+          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg border border-[#DADCE0] hover:bg-[#F8F9FA] transition"
+          style={{ color: '#1C3AA9', borderColor: '#C5D9F9', background: '#F4F7FE' }}
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+            <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+          </svg>
+          Configura API Metriche
+        </button>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        {/* Left column: Basic Info & Metrics */}
-        <div className="md:col-span-2 space-y-6">
-          <div className="p-6 rounded-xl bg-gray-900 border border-gray-800">
-            <h2 className="text-lg font-semibold text-white mb-4">Basic Info</h2>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div><label className="text-xs text-gray-500 block">Name</label><p className="font-medium text-white">{startup.name}</p></div>
-              <div><label className="text-xs text-gray-500 block">Sector</label><p className="font-medium text-white">{startup.sector?.toUpperCase()}</p></div>
-              <div><label className="text-xs text-gray-500 block">Phase</label><p className="font-medium text-white">{startup.phase?.toUpperCase()}</p></div>
-              <div><label className="text-xs text-gray-500 block">Country</label><p className="font-medium text-white">{startup.country || "—"}</p></div>
-              <div><label className="text-xs text-gray-500 block">Team Size</label><p className="font-medium text-white">{startup.teamSize || "—"}</p></div>
-              <div><label className="text-xs text-gray-500 block">Website</label><p className="font-medium text-white">{startup.website || "—"}</p></div>
-            </div>
-            {startup.description && (
-              <div className="mt-4 border-t border-gray-800 pt-4">
-                <label className="text-xs text-gray-500 block">Description</label>
-                <p className="mt-1 text-sm text-gray-300">{startup.description}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="p-6 rounded-xl bg-gray-900 border border-gray-800">
-            <h2 className="text-lg font-semibold text-white mb-4">Metrics</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-gray-800/40 p-4 rounded-lg"><label className="text-xs text-gray-500 block mb-1">MRR</label><p className="text-xl font-bold text-white">${startup.mrr?.toLocaleString() || 0}</p></div>
-              <div className="bg-gray-800/40 p-4 rounded-lg"><label className="text-xs text-gray-500 block mb-1">Users</label><p className="text-xl font-bold text-white">{startup.users?.toLocaleString() || 0}</p></div>
-              <div className="bg-gray-800/40 p-4 rounded-lg"><label className="text-xs text-gray-500 block mb-1">Burn Rate</label><p className="text-xl font-bold text-white">${startup.burnRate?.toLocaleString() || 0}</p></div>
-              <div className="bg-gray-800/40 p-4 rounded-lg"><label className="text-xs text-gray-500 block mb-1">Runway</label><p className="text-xl font-bold text-white">{startup.runway || 0} mos</p></div>
-            </div>
-          </div>
-
-          {/* NEW: Outcome and Pivot Logger Form */}
-          <div className="p-6 rounded-xl bg-gray-900 border border-gray-800 space-y-4">
-            <div>
-              <h2 className="text-lg font-semibold text-white">🔄 Registra un Pivot o Outcome</h2>
-              <p className="text-xs text-gray-500 mt-0.5">Segnala un evento importante. L'OmniMemory Analyzer distillerà la causa dell'esito per migliorare tutti gli agenti.</p>
-            </div>
-
-            <form onSubmit={handleSubmitOutcome} className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {/* Grid Dashboard */}
+      <div className="grid lg:grid-cols-3 gap-6 items-start">
+        
+        {/* Left Columns: Metric Cards & Causal outcome form */}
+        <div className="lg:col-span-2 space-y-6">
+          
+          {/* Key Metrics Overhaul */}
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                label: 'MRR (Revenue)',
+                value: `$${(startup.mrr || 0).toLocaleString()}`,
+                color: '#1A73E8',
+                bg: '#E8F0FE',
+                source: stripeConnected ? 'Stripe API' : 'Manuale',
+                connected: stripeConnected
+              },
+              {
+                label: 'Active Users',
+                value: (startup.users || 0).toLocaleString(),
+                color: '#34A853',
+                bg: '#E6F4EA',
+                source: mixpanelConnected ? 'Mixpanel API' : stripeConnected ? 'Stripe API' : 'Manuale',
+                connected: mixpanelConnected || stripeConnected
+              },
+              {
+                label: 'Monthly Burn Rate',
+                value: `$${(startup.burnRate || 0).toLocaleString()}/mo`,
+                color: '#F9AB00',
+                bg: '#FEF7E0',
+                source: plaidConnected ? 'Plaid API' : 'Manuale',
+                connected: plaidConnected
+              },
+              {
+                label: 'Runway (Life)',
+                value: `${startup.runway || 0} mesi`,
+                color: '#EA4335',
+                bg: '#FCE8E6',
+                source: plaidConnected ? 'Plaid API' : 'Calcolato',
+                connected: plaidConnected
+              },
+            ].map(m => (
+              <div
+                key={m.label}
+                className={`p-4 rounded-xl border border-[#E8EAED] transition-all flex flex-col justify-between h-28 ${flashMetrics ? 'flash-active' : ''}`}
+                style={{ background: '#FFFFFF', boxShadow: '0 1px 2px rgba(60,64,67,0.06)' }}
+              >
                 <div>
-                  <label className="block text-xs text-gray-400 mb-1">Esito/Stato dell'evento</label>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#5F6368' }}>{m.label}</p>
+                    <span
+                      className="px-1.5 py-0.5 rounded text-[8px] font-bold tracking-tight uppercase"
+                      style={{
+                        background: m.connected ? '#E6F4EA' : '#F1F3F4',
+                        color: m.connected ? '#137333' : '#5F6368',
+                        border: m.connected ? '1px solid #CEEAD6' : '1px solid #E8EAED'
+                      }}
+                    >
+                      {m.source}
+                    </span>
+                  </div>
+                  <p className="text-xl font-bold mt-2" style={{ color: '#202124' }}>{m.value}</p>
+                </div>
+                {/* Visual mini-bar inside metric */}
+                <div className="w-full h-1 rounded-full overflow-hidden mt-2" style={{ background: '#F1F3F4' }}>
+                  <div className="h-full rounded-full" style={{ width: '60%', background: m.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Pivot / Causal Analyzer Form */}
+          <div className="rounded-2xl border border-[#E8EAED] overflow-hidden" style={{ background: '#FFFFFF', boxShadow: '0 1px 2px rgba(60,64,67,0.06)' }}>
+            <div className="px-6 py-4" style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
+              <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>Registra un Pivot o Outcome</h2>
+              <p className="text-xs" style={{ color: '#5F6368', marginTop: '2px' }}>
+                Fornisci all'OmniMemory Analyzer dettagli di eventi significativi per generare regole per il team di agenti.
+              </p>
+            </div>
+            <form onSubmit={handleSubmitOutcome} className="p-6 space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5F6368' }}>Esito dell'evento</label>
                   <select
                     value={status}
-                    onChange={(e) => setStatus(e.target.value)}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-blue-500"
+                    onChange={e => setStatus(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg text-xs focus:outline-none"
+                    style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
                   >
-                    <option value="growing">📈 Crescita / Trazione (Growing)</option>
-                    <option value="pivot">🔄 Cambiamento Strategico (Pivot)</option>
-                    <option value="stalled">⏳ Stallo / Rallentamento (Stalled)</option>
-                    <option value="failed">❌ Chiusura Progetto (Failed)</option>
+                    <option value="growing">Trazione / Crescita (Growing)</option>
+                    <option value="pivot">Pivot Strategico (Pivot)</option>
+                    <option value="stalled">Stallo / Difficoltà (Stalled)</option>
+                    <option value="failed">Interruzione Operazioni (Failed)</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5F6368' }}>Data Rilevamento</label>
+                  <input
+                    type="text"
+                    disabled
+                    value={new Date().toLocaleDateString()}
+                    className="w-full px-3 py-2 rounded-lg text-xs"
+                    style={{ background: '#F1F3F4', border: '1px solid #DADCE0', color: '#9AA0AC' }}
+                  />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs text-gray-400 mb-1">Cosa è successo? Spiega i dettagli e le decisioni prese</label>
+                <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5F6368' }}>
+                  Causal Log (Cosa è successo e perché)
+                </label>
                 <textarea
                   value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  placeholder="Es: Abbiamo ridotto i prezzi del 20% ed eliminato le feature inutili. Il tasso di conversione delle demo è raddoppiato nel giro di 2 settimane."
-                  rows={3}
+                  onChange={e => setNotes(e.target.value)}
+                  placeholder="Descrivi l'evento: ad es. 'Abbiamo lanciato una campagna ADS focalizzata sugli sviluppatori riducendo il CAC del 30% ma la retention a 30 giorni è scesa al 12% a causa di un onboarding difettoso...'"
+                  rows={4}
                   required
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm focus:outline-none focus:border-blue-500 resize-none"
+                  className="w-full px-3 py-2 rounded-lg text-xs focus:outline-none"
+                  style={{ background: '#F8F9FA', border: '1px solid #DADCE0', color: '#202124' }}
                 />
               </div>
+
+              {error && (
+                <div className="p-3 rounded-lg text-xs flex items-center gap-2" style={{ background: '#FCE8E6', border: '1px solid #F7CECE', color: '#C5221F' }}>
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                  {error}
+                </div>
+              )}
 
               <button
                 type="submit"
                 disabled={submitting}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium text-sm disabled:opacity-50 transition-colors"
+                className="flex items-center justify-center gap-2 px-4 py-2 text-xs font-bold rounded-lg text-white transition disabled:opacity-50"
+                style={{ background: '#1A73E8', boxShadow: '0 1px 2px rgba(26,115,232,0.3)' }}
               >
-                {submitting ? "Analisi in corso con AI..." : "🚀 Invia ad OmniMemory"}
+                {submitting ? (
+                  <>
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    Analisi OmniMemory...
+                  </>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                    Esegui Causal Analysis
+                  </>
+                )}
               </button>
             </form>
 
-            {error && (
-              <div className="p-3 bg-red-900/30 border border-red-800 text-red-400 rounded-lg text-xs">
-                ❌ Errore: {error}
-              </div>
-            )}
-
-            {/* Analysis Result Display */}
+            {/* Causal Analysis Report Display */}
             {analysis && (
-              <div className="mt-4 p-5 bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-blue-800/40 rounded-xl space-y-3">
-                <div className="flex items-center justify-between border-b border-gray-800 pb-2">
-                  <h3 className="font-bold text-white text-sm flex items-center gap-2">
-                    🧠 Report Analisi Causale: <span className="text-blue-400">"{analysis.title}"</span>
+              <div className="mx-6 mb-6 p-4 rounded-xl border border-[#C5D9F9]" style={{ background: '#F4F7FE' }}>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="font-bold text-xs uppercase tracking-wide" style={{ color: '#1A73E8' }}>
+                    Report OmniMemory: "{analysis.title}"
                   </h3>
-                  <span className="text-xs px-2 py-0.5 bg-blue-500/20 text-blue-300 rounded font-semibold">
-                    Salvo in Piattaforma
+                  <span className="px-2 py-0.5 rounded text-[8px] font-bold tracking-tight uppercase" style={{ background: '#D2E3FC', color: '#1A73E8' }}>
+                    Modello Aggiornato
                   </span>
                 </div>
-                <p className="text-xs text-gray-300 leading-relaxed whitespace-pre-wrap">{analysis.analysis}</p>
-                
-                <div className="grid sm:grid-cols-2 gap-4 text-xs pt-2">
-                  {analysis.keyFactors && analysis.keyFactors.length > 0 && (
+                <p className="text-xs leading-relaxed whitespace-pre-wrap mb-4" style={{ color: '#3C4043' }}>{analysis.analysis}</p>
+                <div className="grid sm:grid-cols-2 gap-4">
+                  {analysis.keyFactors?.length > 0 && (
                     <div>
-                      <span className="font-bold text-green-400 block mb-1">🔑 Fattori Chiave Successo:</span>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: '#137333' }}>Fattori di Successo</p>
                       <div className="flex flex-wrap gap-1">
                         {analysis.keyFactors.map((f: string, i: number) => (
-                          <span key={i} className="px-2 py-0.5 bg-green-500/10 text-green-300 rounded">{f}</span>
+                          <span key={i} className="px-2 py-0.5 rounded text-[9px] font-semibold" style={{ background: '#E6F4EA', color: '#137333', border: '1px solid #CEEAD6' }}>{f}</span>
                         ))}
                       </div>
                     </div>
                   )}
-                  {analysis.failureModes && analysis.failureModes.length > 0 && (
+                  {analysis.failureModes?.length > 0 && (
                     <div>
-                      <span className="font-bold text-red-400 block mb-1">⚠️ Errori da Evitare:</span>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: '#C5221F' }}>Errori di Strategia Rilevati</p>
                       <div className="flex flex-wrap gap-1">
                         {analysis.failureModes.map((f: string, i: number) => (
-                          <span key={i} className="px-2 py-0.5 bg-red-500/10 text-red-300 rounded">{f}</span>
+                          <span key={i} className="px-2 py-0.5 rounded text-[9px] font-semibold" style={{ background: '#FCE8E6', color: '#C5221F', border: '1px solid #F7CECE' }}>{f}</span>
                         ))}
                       </div>
                     </div>
@@ -190,24 +435,326 @@ export default function StartupPage() {
           </div>
         </div>
 
-        {/* Right column: Active Agents list */}
+        {/* Right Column: Synergy Gauge & Agent Hub */}
         <div className="space-y-6">
-          <div className="p-6 rounded-xl bg-gray-900 border border-gray-800">
-            <h2 className="text-lg font-semibold text-white mb-4">Active Agents</h2>
-            <div className="space-y-2">
-              {startup.agentConfigs?.map((agent: any) => (
-                <div key={agent.id} className={`p-3 rounded-lg border flex items-center justify-between ${agent.isActive ? "border-green-500/30 bg-green-500/5 text-green-400" : "border-gray-800 text-gray-500"}`}>
-                  <div>
-                    <p className="font-medium text-sm">{agent.name}</p>
-                    <p className="text-xs text-gray-500">{agent.type}</p>
+          
+          {/* Synergy Score Ring Gauge */}
+          <div className="p-5 rounded-2xl border border-[#E8EAED]" style={{ background: '#FFFFFF', boxShadow: '0 1px 2px rgba(60,64,67,0.06)' }}>
+            <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>Sinergia Operativa Team</h2>
+            <div className="flex items-center gap-4 mt-4">
+              <div className="relative w-16 h-16 flex items-center justify-center flex-shrink-0">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle cx="32" cy="32" r="28" fill="transparent" stroke="#F1F3F4" strokeWidth="5" />
+                  <circle cx="32" cy="32" r="28" fill="transparent" stroke={synergyScore > 60 ? "#34A853" : synergyScore > 30 ? "#F9AB00" : "#EA4335"} strokeWidth="5" strokeDasharray={strokeDash} strokeDashoffset={strokeOffset} strokeLinecap="round" className="transition-all duration-500" />
+                </svg>
+                <span className="absolute text-xs font-bold" style={{ color: '#202124' }}>{synergyScore}%</span>
+              </div>
+              <div>
+                <p className="text-xs font-semibold" style={{ color: '#3C4043' }}>
+                  {activeCount} su 6 agenti attivati
+                </p>
+                <p className="text-[11px] mt-1 leading-relaxed" style={{ color: '#5F6368' }}>
+                  {synergyScore === 100 
+                    ? "Copertura strategica globale completata. Gli agenti coordineranno l'auto-analisi." 
+                    : "Attiva più agenti specialistici per sbloccare l'auto-analisi incrociata dei dati."}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Revamped Team Agenti Hub */}
+          <div className="rounded-2xl border border-[#E8EAED] overflow-hidden" style={{ background: '#FFFFFF', boxShadow: '0 1px 2px rgba(60,64,67,0.06)' }}>
+            <div className="px-5 py-3.5" style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
+              <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>Team Agenti Specializzati</h2>
+            </div>
+            <div className="divide-y" style={{ borderColor: '#F1F3F4' }}>
+              {startup.agentConfigs?.map((agent: any) => {
+                const cfg = AGENT_CONFIGS[agent.type] || { color: '#5F6368', gradient: 'linear-gradient(135deg, #5F6368, #9AA0AC)', label: agent.type, desc: 'Agente AI' };
+                return (
+                  <div key={agent.id} className="p-4 flex flex-col gap-3 transition-colors hover:bg-[#FAFBFB]">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-center gap-3">
+                        {/* Avatar bubble */}
+                        <div
+                          className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white relative flex-shrink-0"
+                          style={{ background: cfg.gradient }}
+                        >
+                          {agent.name.charAt(0).toUpperCase()}
+                          {/* Glowing pulse indicator */}
+                          <div
+                            className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white"
+                            style={{ background: agent.isActive ? '#34A853' : '#DADCE0' }}
+                          >
+                            {agent.isActive && (
+                              <span className="absolute inset-0 rounded-full bg-[#34A853] animate-ping opacity-75" />
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold" style={{ color: '#202124' }}>{agent.name}</p>
+                          <p className="text-[10px]" style={{ color: '#9AA0AC' }}>{cfg.label} · {cfg.desc}</p>
+                        </div>
+                      </div>
+
+                      {/* Toggle Switch */}
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={agent.isActive}
+                          onChange={() => handleToggleAgent(agent.id, agent.isActive)}
+                          className="sr-only custom-switch"
+                        />
+                        <div className="w-7 h-4 rounded-full bg-[#DADCE0] transition-colors relative">
+                          <div className="switch-dot absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-[#FFFFFF] transition-transform" />
+                        </div>
+                      </label>
+                    </div>
+
+                    {/* Stats and Action details */}
+                    <div className="flex items-center justify-between pt-1" style={{ borderTop: '1px dashed #F1F3F4' }}>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F1F3F4] text-[#5F6368] font-medium">
+                          💬 {agent.messageCount || 0} messaggi
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F4F7FE] text-[#1A73E8] font-medium">
+                          🧠 {agent.memoryCount || 0} ricordi
+                        </span>
+                      </div>
+                      <a
+                        href={`/dashboard/agents?id=${agent.id}`}
+                        className="text-[10px] font-semibold hover:underline"
+                        style={{ color: '#1A73E8' }}
+                      >
+                        Apri Chat →
+                      </a>
+                    </div>
                   </div>
-                  <span className={`w-2 h-2 rounded-full ${agent.isActive ? "bg-green-500" : "bg-gray-600"}`} />
+                );
+              })}
+              {(!startup.agentConfigs || startup.agentConfigs.length === 0) && (
+                <div className="p-5 text-center text-xs" style={{ color: '#9AA0AC' }}>
+                  Nessun agente registrato nel workspace. Vai alla sezione Agenti per inizializzare il team.
                 </div>
-              ))}
+              )}
             </div>
           </div>
         </div>
+
       </div>
+
+      {/* Slide-over Integrations Configuration Panel */}
+      {showIntegrations && (
+        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
+          {/* Backdrop overlay */}
+          <div
+            onClick={() => {
+              handleSaveIntegrations();
+              setShowIntegrations(false);
+            }}
+            className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity"
+          />
+
+          {/* Drawer container */}
+          <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col z-10 border-l border-[#E8EAED]" style={{ background: '#FFFFFF' }}>
+            {/* Drawer Header */}
+            <div className="px-6 py-4 flex items-center justify-between border-b border-[#E8EAED]" style={{ background: '#F8F9FA' }}>
+              <div>
+                <h3 className="font-bold text-sm" style={{ color: '#202124' }}>Integrazioni API Metriche</h3>
+                <p className="text-[11px]" style={{ color: '#5F6368' }}>Connetti e sincronizza dati finanziari ed operativi</p>
+              </div>
+              <button
+                onClick={() => {
+                  handleSaveIntegrations();
+                  setShowIntegrations(false);
+                }}
+                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#E8EAED] transition text-[#5F6368]"
+              >
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+              </button>
+            </div>
+
+            {/* Drawer Content */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              
+              {/* Stripe Connection Card */}
+              <div className="p-4 rounded-xl border border-[#E8EAED]" style={{ background: '#FFFFFF' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded bg-[#635BFF] flex items-center justify-center text-white text-[10px] font-bold">S</div>
+                    <span className="text-xs font-bold" style={{ color: '#202124' }}>Connessione Stripe</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={stripeConnected}
+                      onChange={e => setStripeConnected(e.target.checked)}
+                      className="sr-only custom-switch"
+                    />
+                    <div className="w-7 h-4 rounded-full bg-[#DADCE0] transition-colors relative">
+                      <div className="switch-dot absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-[#FFFFFF] transition-transform" />
+                    </div>
+                  </label>
+                </div>
+                {stripeConnected && (
+                  <div className="space-y-3 mt-3 pt-3 border-t border-[#F1F3F4] animate-fade-in">
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>ENDPOINT URL (MRR & Utenti)</label>
+                      <input
+                        type="text"
+                        value={stripeUrl}
+                        onChange={e => setStripeUrl(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
+                        style={{ color: '#202124' }}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>STRIPE API MOCK KEY</label>
+                      <input
+                        type="password"
+                        placeholder="sk_test_••••••••••••••••••••"
+                        className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Mixpanel Connection Card */}
+              <div className="p-4 rounded-xl border border-[#E8EAED]" style={{ background: '#FFFFFF' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded bg-[#4F44E0] flex items-center justify-center text-white text-[10px] font-bold">M</div>
+                    <span className="text-xs font-bold" style={{ color: '#202124' }}>Connessione Mixpanel / GA</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={mixpanelConnected}
+                      onChange={e => setMixpanelConnected(e.target.checked)}
+                      className="sr-only custom-switch"
+                    />
+                    <div className="w-7 h-4 rounded-full bg-[#DADCE0] transition-colors relative">
+                      <div className="switch-dot absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-[#FFFFFF] transition-transform" />
+                    </div>
+                  </label>
+                </div>
+                {mixpanelConnected && (
+                  <div className="space-y-3 mt-3 pt-3 border-t border-[#F1F3F4] animate-fade-in">
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>ENDPOINT URL (Utenti Attivi)</label>
+                      <input
+                        type="text"
+                        value={mixpanelUrl}
+                        onChange={e => setMixpanelUrl(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
+                        style={{ color: '#202124' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Plaid Connection Card */}
+              <div className="p-4 rounded-xl border border-[#E8EAED]" style={{ background: '#FFFFFF' }}>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded bg-[#0A85EA] flex items-center justify-center text-white text-[10px] font-bold">P</div>
+                    <span className="text-xs font-bold" style={{ color: '#202124' }}>Connessione Plaid (Financial)</span>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={plaidConnected}
+                      onChange={e => setPlaidConnected(e.target.checked)}
+                      className="sr-only custom-switch"
+                    />
+                    <div className="w-7 h-4 rounded-full bg-[#DADCE0] transition-colors relative">
+                      <div className="switch-dot absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-[#FFFFFF] transition-transform" />
+                    </div>
+                  </label>
+                </div>
+                {plaidConnected && (
+                  <div className="space-y-3 mt-3 pt-3 border-t border-[#F1F3F4] animate-fade-in">
+                    <div>
+                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>ENDPOINT URL (Burn Rate & runway)</label>
+                      <input
+                        type="text"
+                        value={plaidUrl}
+                        onChange={e => setPlaidUrl(e.target.value)}
+                        className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
+                        style={{ color: '#202124' }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Synchronize Logs console block */}
+              <div className="rounded-xl border border-[#3C4043] overflow-hidden" style={{ background: '#202124', color: '#F1F3F4' }}>
+                <div className="px-4 py-2 flex items-center justify-between border-b border-[#3C4043]" style={{ background: '#2B2D30' }}>
+                  <div className="flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-[#EA4335]" />
+                    <span className="w-2 h-2 rounded-full bg-[#F9AB00]" />
+                    <span className="w-2 h-2 rounded-full bg-[#34A853]" />
+                    <span className="text-[10px] font-mono ml-2 text-[#9AA0AC]">API Sync Console</span>
+                  </div>
+                  <span className="text-[9px] font-mono text-[#9AA0AC]">ready</span>
+                </div>
+                <div className="p-4 font-mono text-[10px] space-y-1.5 h-44 overflow-y-auto custom-scrollbar">
+                  {terminalLogs.map((log, index) => (
+                    <div key={index} className="leading-relaxed">
+                      {log.startsWith("ERROR") || log.includes("ERRORE") ? (
+                        <span className="text-[#F28B82]">{log}</span>
+                      ) : log.includes("completata") || log.includes("successo") ? (
+                        <span className="text-[#81C995]">{log}</span>
+                      ) : (
+                        <span>{log}</span>
+                      )}
+                    </div>
+                  ))}
+                  {terminalLogs.length === 0 && (
+                    <div className="text-[#9AA0AC] italic">Nessun log registrato. Avvia la sincronizzazione delle API abilitate.</div>
+                  )}
+                  {syncing && (
+                    <div className="flex items-center gap-1.5 text-[#81C995]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#81C995] animate-ping" />
+                      <span>Connessione socket attiva, in attesa di dati...</span>
+                    </div>
+                  )}
+                  <div ref={terminalEndRef} />
+                </div>
+              </div>
+
+              <div className="pt-2">
+                <button
+                  type="button"
+                  disabled={syncing || (!stripeConnected && !mixpanelConnected && !plaidConnected)}
+                  onClick={() => {
+                    handleSaveIntegrations();
+                    handleSyncNow();
+                  }}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-lg text-white transition disabled:opacity-50"
+                  style={{ background: '#34A853', boxShadow: '0 1px 2px rgba(52,168,83,0.3)' }}
+                >
+                  {syncing ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      Sincronizzazione in corso...
+                    </>
+                  ) : (
+                    <>
+                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/></svg>
+                      Sincronizza Ora
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
