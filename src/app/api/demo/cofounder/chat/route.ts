@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
+import { promises as fs } from "fs";
+import path from "path";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+
+const METRICS_FILE_PATH = path.join(process.cwd(), "src/lib/custom-metrics.json");
 
 const supabaseHeaders = {
   "apikey": SUPABASE_SERVICE_KEY,
@@ -26,6 +30,21 @@ async function supabaseFetch(path: string, options: any = {}) {
     throw new Error(`Supabase error: ${response.status} - ${errorText}`);
   }
   return response.json();
+}
+
+// Helpers for Metrics file DB
+async function getMetricsData() {
+  try {
+    const data = await fs.readFile(METRICS_FILE_PATH, "utf-8");
+    return JSON.parse(data);
+  } catch (err) {
+    return [];
+  }
+}
+
+async function saveMetricsData(data: any) {
+  await fs.mkdir(path.dirname(METRICS_FILE_PATH), { recursive: true });
+  await fs.writeFile(METRICS_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
 }
 
 // Tool definitions for coFounder
@@ -76,6 +95,60 @@ const TOOLS = [
         required: ["name", "type"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "addCustomMetric",
+      description: "Aggiunge una nuova metrica personalizzata o un grafico (line, bar, gauge, cohort, value) alla dashboard Analytics.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Titolo della metrica (es: Costo Acquisizione Clienti, LTV/CAC)" },
+          value: { type: "string", description: "Valore corrente visualizzato (es: 150€, 3.4x, 12%)" },
+          type: { type: "string", enum: ["currency", "percentage", "ratio", "integer"], description: "Tipo di dato dell'indicatore" },
+          chartType: { type: "string", enum: ["line", "bar", "gauge", "cohort", "value"], description: "Tipo di grafico visivo" },
+          formula: { type: "string", description: "Formula o logica di calcolo descrittiva" },
+          data: { type: "array", items: { type: "number" }, description: "Valori numerici sequenziali per l'andamento del grafico (es: [200, 180, 150])" },
+          labels: { type: "array", items: { type: "string" }, description: "Etichette temporali (es: ['Apr', 'Mag', 'Giu'])" }
+        },
+        required: ["title", "value"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "updateCustomMetric",
+      description: "Modifica i dati o le impostazioni di una metrica personalizzata già presente nel dashboard.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "ID univoco dell'indicatore da modificare" },
+          title: { type: "string", description: "Nuovo titolo" },
+          value: { type: "string", description: "Nuovo valore corrente" },
+          chartType: { type: "string", enum: ["line", "bar", "gauge", "cohort", "value"], description: "Nuovo tipo di visualizzazione" },
+          data: { type: "array", items: { type: "number" }, description: "Nuova serie di dati numerici" },
+          labels: { type: "array", items: { type: "string" }, description: "Nuova serie di etichette temporali" },
+          formula: { type: "string", description: "Nuova formula" }
+        },
+        required: ["id"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "deleteCustomMetric",
+      description: "Elimina una metrica personalizzata dal dashboard utilizzando il suo ID.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "ID della metrica da eliminare" }
+        },
+        required: ["id"]
+      }
+    }
   }
 ];
 
@@ -104,15 +177,19 @@ export async function POST(req: Request) {
     // 2. Prepare Agent Loop context
     const systemPrompt = `Sei ${cofounderName}, l'assistente co-fondatore intelligente integrato all'interno di AgentFoundry.
 Il tuo compito è aiutare l'utente a gestire la sua startup ("${startup.name}") e il suo team di agenti AI.
-Hai accesso ad alcuni strumenti/funzioni per interrogare e modificare il database in tempo reale.
+Hai accesso ad alcuni strumenti/funzioni per interrogare e modificare il database e i grafici in tempo reale.
 Puoi:
 1. Vedere le info della startup (getStartupInfo).
 2. Vedere gli agenti attivi (getActiveAgents).
-3. Modificare le metriche (updateStartupMetrics).
+3. Modificare le metriche della startup (updateStartupMetrics).
 4. Creare nuovi agenti specializzati (createAgent).
+5. Aggiungere metriche o grafici al dashboard Metriche (addCustomMetric).
+6. Aggiornare metriche/grafici esistenti (updateCustomMetric).
+7. Eliminare metriche o grafici (deleteCustomMetric).
 
-Se l'utente ti chiede di creare un agente, fallo usando lo strumento 'createAgent'.
-Se ti chiede di aggiornare le metriche (es: "imposta il burn rate a 2000"), fallo usando lo strumento 'updateStartupMetrics'.
+Se l'utente ti chiede di aggiungere o creare un grafico/metrica, usa 'addCustomMetric'.
+Se ti chiede di aggiornare un grafico/metrica (es: "imposta il valore di metric-mrr-growth a $18000"), usa 'updateCustomMetric'.
+Se ti chiede di rimuovere una metrica, usa 'deleteCustomMetric'.
 Fornisci risposte concise, professionali ed empatiche in lingua italiana. Parla come un vero partner di business.
 Mantieni traccia delle azioni eseguite. Spiega chiaramente cosa hai fatto una volta che lo strumento ha avuto successo.`;
 
@@ -170,7 +247,7 @@ Mantieni traccia delle azioni eseguite. Spiega chiaramente cosa hai fatto una vo
             if (functionName === "getStartupInfo") {
               const freshStartup = await supabaseFetch(`/Startup?id=eq.${startupId}&select=*`);
               result = freshStartup && freshStartup.length > 0 ? freshStartup[0] : startup;
-              executedTools.push({ name: functionName, success: true, details: "Info startup caricate con successo." });
+              executedTools.push({ name: functionName, success: true, details: "Info startup caricate." });
             } else if (functionName === "getActiveAgents") {
               const agents = await supabaseFetch(`/AgentConfig?startupId=eq.${startupId}&select=id,name,type,isActive`);
               result = agents || [];
@@ -187,7 +264,7 @@ Mantieni traccia delle azioni eseguite. Spiega chiaramente cosa hai fatto una vo
                 body: JSON.stringify(payload)
               });
               result = updated && updated.length > 0 ? updated[0] : { success: true };
-              executedTools.push({ name: functionName, success: true, details: `Metriche aggiornate: ${Object.keys(payload).map(k => `${k}=${payload[k]}`).join(", ")}` });
+              executedTools.push({ name: functionName, success: true, details: `Metriche base aggiornate: mrr=${args.mrr || ''}` });
             } else if (functionName === "createAgent") {
               const newAgent = await supabaseFetch(`/AgentConfig`, {
                 method: "POST",
@@ -199,7 +276,52 @@ Mantieni traccia delle azioni eseguite. Spiega chiaramente cosa hai fatto una vo
                 })
               });
               result = newAgent && newAgent.length > 0 ? newAgent[0] : { success: true };
-              executedTools.push({ name: functionName, success: true, details: `Agente creato: ${args.name} (${args.type})` });
+              executedTools.push({ name: functionName, success: true, details: `Agente creato: ${args.name}` });
+            } else if (functionName === "addCustomMetric") {
+              const current = await getMetricsData();
+              const newMetric = {
+                id: "metric-custom-" + Date.now(),
+                title: args.title,
+                value: args.value,
+                type: args.type || "integer",
+                chartType: args.chartType || "value",
+                formula: args.formula || "",
+                data: Array.isArray(args.data) ? args.data : [],
+                labels: Array.isArray(args.labels) ? args.labels : [],
+                apiEndpoint: null,
+                isDefault: false,
+                createdAt: new Date().toISOString()
+              };
+              current.push(newMetric);
+              await saveMetricsData(current);
+              result = newMetric;
+              executedTools.push({ name: functionName, success: true, details: `Metrica creata: "${args.title}" (${args.value})` });
+            } else if (functionName === "updateCustomMetric") {
+              const current = await getMetricsData();
+              const idx = current.findIndex((m: any) => m.id === args.id);
+              if (idx === -1) throw new Error(`Metrica con ID ${args.id} non trovata`);
+              
+              const updated = {
+                ...current[idx],
+                ...(args.title !== undefined && { title: args.title }),
+                ...(args.value !== undefined && { value: args.value }),
+                ...(args.chartType !== undefined && { chartType: args.chartType }),
+                ...(args.data !== undefined && { data: args.data }),
+                ...(args.labels !== undefined && { labels: args.labels }),
+                ...(args.formula !== undefined && { formula: args.formula }),
+              };
+              current[idx] = updated;
+              await saveMetricsData(current);
+              result = updated;
+              executedTools.push({ name: functionName, success: true, details: `Metrica "${updated.title}" aggiornata a ${updated.value}` });
+            } else if (functionName === "deleteCustomMetric") {
+              const current = await getMetricsData();
+              const filtered = current.filter((m: any) => m.id !== args.id);
+              if (current.length === filtered.length) throw new Error(`Metrica con ID ${args.id} non trovata`);
+              
+              await saveMetricsData(filtered);
+              result = { success: true };
+              executedTools.push({ name: functionName, success: true, details: `Metrica rimossa (ID: ${args.id})` });
             } else {
               result = { error: "Unknown function" };
             }

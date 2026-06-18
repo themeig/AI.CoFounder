@@ -1,0 +1,115 @@
+[
+  {
+    "id": "metric-mrr-growth",
+    "title": "MRR Growth Trend",
+    "value": "$15,420",
+    "type": "currency",
+    "chartType": "line",
+    "data": [
+      10200,
+      11500,
+      12100,
+      13400,
+      14200,
+      15420
+    ],
+    "labels": [
+      "Genn",
+      "Febb",
+      "Mar",
+      "Apr",
+      "Mag",
+      "Giu"
+    ],
+    "formula": "MRR Month-over-Month Growth",
+    "isDefault": true
+  },
+  {
+    "id": "metric-ltv-cac",
+    "title": "LTV : CAC Ratio",
+    "value": "4.8x",
+    "type": "ratio",
+    "chartType": "gauge",
+    "data": [
+      4.8
+    ],
+    "formula": "Customer Lifetime Value / Customer Acquisition Cost",
+    "isDefault": true
+  },
+  {
+    "id": "metric-churn",
+    "title": "Monthly Churn Rate",
+    "value": "2.4%",
+    "type": "percentage",
+    "chartType": "bar",
+    "data": [
+      3.1,
+      2.9,
+      2.7,
+      2.5,
+      2.4
+    ],
+    "labels": [
+      "Febb",
+      "Mar",
+      "Apr",
+      "Mag",
+      "Giu"
+    ],
+    "formula": "Cancellazioni / Totale Utenti Attivi",
+    "isDefault": true
+  },
+  {
+    "id": "metric-retention",
+    "title": "User Cohort Retention",
+    "value": "72%",
+    "type": "percentage",
+    "chartType": "cohort",
+    "cohortData": [
+      {
+        "cohort": "Gen 26",
+        "size": 120,
+        "r1": 85,
+        "r2": 72,
+        "r3": 65
+      },
+      {
+        "cohort": "Feb 26",
+        "size": 150,
+        "r1": 88,
+        "r2": 75,
+        "r3": 68
+      },
+      {
+        "cohort": "Mar 26",
+        "size": 180,
+        "r1": 90,
+        "r2": 80,
+        "r3": 72
+      }
+    ],
+    "formula": "Retention Cohort Decay (M1, M2, M3)",
+    "isDefault": true
+  },
+  {
+    "id": "metric-custom-1781809830629",
+    "title": "CAC",
+    "value": "120€",
+    "type": "integer",
+    "chartType": "bar",
+    "formula": "Spesa / Clienti",
+    "data": [
+      160,
+      140,
+      120
+    ],
+    "labels": [
+      "Aprile",
+      "Maggio",
+      "Giugno"
+    ],
+    "apiEndpoint": null,
+    "isDefault": false,
+    "createdAt": "2026-06-18T19:10:30.629Z"
+  }
+]
