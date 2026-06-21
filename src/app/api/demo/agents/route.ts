@@ -87,7 +87,7 @@ export async function GET() {
     const startup = await getOrCreateStartup();
 
     // Get agent configs linked to this startup
-    let agents = await supabaseFetch(`/AgentConfig?startupId=eq.${startup.id}&select=id,type,name,isActive`);
+    let agents = await supabaseFetch(`/AgentConfig?startupId=eq.${startup.id}&select=id,type,name,isActive,settings`);
 
     // If no agents are in the database, seed default agents
     if (!agents || agents.length === 0) {
@@ -100,6 +100,7 @@ export async function GET() {
             type: da.type,
             name: da.name,
             isActive: da.isActive,
+            settings: { enabledTools: ["get_knowledge_pattern_details", "webSearch", "getStartupInfo", "getCustomMetrics", "readWebPage"] }
           }),
         });
         if (newAgent && newAgent.length > 0) {
@@ -140,6 +141,7 @@ export async function POST(req: Request) {
         type: type.toLowerCase(),
         name,
         isActive: true,
+        settings: { enabledTools: ["get_knowledge_pattern_details", "webSearch", "getStartupInfo", "getCustomMetrics", "readWebPage"] }
       }),
     });
 
@@ -194,7 +196,7 @@ export async function PATCH(req: Request) {
     }
 
     const body = await req.json();
-    const { id, isActive, name } = body;
+    const { id, isActive, name, settings } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id parameter" }, { status: 400 });
@@ -203,6 +205,7 @@ export async function PATCH(req: Request) {
     const payload: any = {};
     if (typeof isActive === "boolean") payload.isActive = isActive;
     if (name) payload.name = name;
+    if (settings !== undefined) payload.settings = settings;
 
     const updated = await supabaseFetch(`/AgentConfig?id=eq.${id}`, {
       method: "PATCH",

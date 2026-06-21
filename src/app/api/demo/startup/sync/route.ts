@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { promises as fs } from "fs";
+import * as path from "path";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
@@ -199,6 +201,132 @@ export async function POST(req: Request) {
       } catch (err: any) {
         logs.push(`[${new Date().toLocaleTimeString()}] Plaid Sync Errore: ${err.message}`);
       }
+    }
+
+    // Helper to resolve dot-notation json paths (e.g. data.users)
+    const getJsonValue = (obj: any, pathStr: string) => {
+      if (!pathStr) return obj;
+      const parts = pathStr.split(".");
+      let current = obj;
+      for (const part of parts) {
+        if (current === null || current === undefined) return undefined;
+        const arrayMatch = part.match(/^(\w+)\[(\d+)\]$/);
+        if (arrayMatch) {
+          const key = arrayMatch[1];
+          const index = parseInt(arrayMatch[2], 10);
+          current = current[key]?.[index];
+        } else {
+          current = current[part];
+        }
+      }
+      return current;
+    };
+
+    // 5.5 Sync Custom Connections
+    const connectionsPath = path.join(process.cwd(), "src/lib/custom-connections.json");
+    const metricsPath = path.join(process.cwd(), "src/lib/custom-metrics.json");
+
+    try {
+      const connectionsData = await fs.readFile(connectionsPath, "utf-8");
+      const connections = JSON.parse(connectionsData);
+      const activeConns = connections.filter((c: any) => c.isActive);
+
+      if (activeConns.length > 0) {
+        logs.push(`[${new Date().toLocaleTimeString()}] Rilevate ${activeConns.length} connessioni API personalizzate attive...`);
+
+        // Load custom metrics in case we need to update any custom metric value/trend
+        let customMetrics: any[] = [];
+        try {
+          const metricsData = await fs.readFile(metricsPath, "utf-8");
+          customMetrics = JSON.parse(metricsData);
+        } catch {}
+
+        for (const conn of activeConns) {
+          logs.push(`[${new Date().toLocaleTimeString()}] Avvio recupero da "${conn.name}" (${conn.url})...`);
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), conn.timeout || 5000);
+
+            const fetchOptions: any = {
+              method: conn.method || "GET",
+              headers: conn.headers || {},
+              signal: controller.signal
+            };
+            if (conn.method !== "GET" && conn.body) {
+              fetchOptions.body = typeof conn.body === "string" ? conn.body : JSON.stringify(conn.body);
+              fetchOptions.headers["Content-Type"] = fetchOptions.headers["Content-Type"] || "application/json";
+            }
+
+            const connRes = await fetch(conn.url, fetchOptions);
+            clearTimeout(timeoutId);
+            if (!connRes.ok) throw new Error(`Risposta HTTP ${connRes.status}`);
+
+            let extracted: any;
+            if (conn.responseType === "text") {
+              const textResponse = await connRes.text();
+              extracted = textResponse.trim().replace(/^["']|["']$/g, '');
+            } else {
+              const jsonResponse = await connRes.json();
+              extracted = getJsonValue(jsonResponse, conn.jsonPath);
+            }
+
+            if (extracted === undefined) {
+              throw new Error(`JSON Path "${conn.jsonPath}" non ha prodotto alcun risultato.`);
+            }
+
+            logs.push(`[${new Date().toLocaleTimeString()}] "${conn.name}": Estratto valore "${extracted}"`);
+
+            const numValue = typeof extracted === "number" ? extracted : parseFloat(extracted);
+
+            // Update either base metric or custom metric card
+            if (["mrr", "users", "burnRate", "runway"].includes(conn.targetMetric)) {
+              if (!isNaN(numValue)) {
+                if (conn.targetMetric === "mrr") newMrr = Math.round(numValue);
+                if (conn.targetMetric === "users") newUsers = Math.round(numValue);
+                if (conn.targetMetric === "burnRate") newBurnRate = Math.round(numValue);
+                if (conn.targetMetric === "runway") newRunway = Math.round(numValue);
+                logs.push(`[${new Date().toLocaleTimeString()}] Metrica base "${conn.targetMetric}" aggiornata a ${numValue}`);
+              } else {
+                logs.push(`[${new Date().toLocaleTimeString()}] ATTENZIONE: Il valore estratto non è un numero valido per la metrica base "${conn.targetMetric}".`);
+              }
+            } else {
+              // Custom metric card update!
+              const metricIdx = customMetrics.findIndex((m: any) => m.id === conn.targetMetric);
+              if (metricIdx !== -1) {
+                let formattedValue = String(extracted);
+                const m = customMetrics[metricIdx];
+                if (!isNaN(numValue)) {
+                  if (m.type === "currency") formattedValue = `$${Math.round(numValue).toLocaleString()}`;
+                  else if (m.type === "percentage") formattedValue = `${numValue}%`;
+                  else if (m.type === "ratio") formattedValue = `${numValue}x`;
+                  else formattedValue = Math.round(numValue).toLocaleString();
+
+                  // Append or update trend data
+                  if (m.chartType === "line" || m.chartType === "bar") {
+                    const newData = [...(m.data || [])];
+                    if (newData.length >= 6) newData.shift();
+                    newData.push(numValue);
+                    m.data = newData;
+                  } else if (m.chartType === "gauge") {
+                    m.data = [numValue];
+                  }
+                }
+                m.value = formattedValue;
+                logs.push(`[${new Date().toLocaleTimeString()}] Metrica personalizzata "${m.title}" aggiornata a "${formattedValue}"`);
+              } else {
+                logs.push(`[${new Date().toLocaleTimeString()}] ERRORE: Metrica target "${conn.targetMetric}" non trovata.`);
+              }
+            }
+          } catch (connErr: any) {
+            logs.push(`[${new Date().toLocaleTimeString()}] Errore connessione "${conn.name}": ${connErr.message}`);
+          }
+        }
+
+        // Save updated custom metrics if any custom target was modified
+        await fs.writeFile(metricsPath, JSON.stringify(customMetrics, null, 2), "utf-8");
+      }
+    } catch (e: any) {
+      // Ignore if file doesn't exist
     }
 
     // 6. Update database

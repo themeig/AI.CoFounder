@@ -92,7 +92,7 @@
     "isDefault": true
   },
   {
-    "id": "metric-custom-1781809830629",
+    "id": "metric-custom-1781810241075",
     "title": "CAC",
     "value": "120€",
     "type": "integer",
@@ -110,6 +110,111 @@
     ],
     "apiEndpoint": null,
     "isDefault": false,
-    "createdAt": "2026-06-18T19:10:30.629Z"
+    "createdAt": "2026-06-18T19:17:21.075Z"
+  },
+  {
+    "id": "metric-custom-1781811039782",
+    "title": "CAC",
+    "value": "120€",
+    "type": "currency",
+    "chartType": "bar",
+    "formula": "Spesa / Clienti",
+    "data": [
+      160,
+      140,
+      120
+    ],
+    "labels": [
+      "Aprile",
+      "Maggio",
+      "Giugno"
+    ],
+    "apiEndpoint": null,
+    "isDefault": false,
+    "createdAt": "2026-06-18T19:30:39.782Z"
+  },
+  {
+    "id": "metric-custom-1781811768053",
+    "title": "CAC",
+    "value": "120€",
+    "type": "integer",
+    "chartType": "bar",
+    "formula": "Spesa / Clienti",
+    "data": [
+      160,
+      140,
+      120
+    ],
+    "labels": [
+      "Aprile",
+      "Maggio",
+      "Giugno"
+    ],
+    "apiEndpoint": null,
+    "isDefault": false,
+    "createdAt": "2026-06-18T19:42:48.053Z"
+  },
+  {
+    "id": "metric-custom-1781812265040",
+    "title": "CAC",
+    "value": "120€",
+    "type": "integer",
+    "chartType": "bar",
+    "formula": "Spesa / Clienti",
+    "data": [
+      160,
+      140,
+      120
+    ],
+    "labels": [
+      "Aprile",
+      "Maggio",
+      "Giugno"
+    ],
+    "apiEndpoint": null,
+    "isDefault": false,
+    "createdAt": "2026-06-18T19:51:05.040Z"
+  },
+  {
+    "id": "metric-custom-1781812461771",
+    "title": "CAC",
+    "value": "120€",
+    "type": "integer",
+    "chartType": "bar",
+    "formula": "Spesa / Clienti",
+    "data": [
+      160,
+      140,
+      120
+    ],
+    "labels": [
+      "Aprile",
+      "Maggio",
+      "Giugno"
+    ],
+    "apiEndpoint": null,
+    "isDefault": false,
+    "createdAt": "2026-06-18T19:54:21.771Z"
+  },
+  {
+    "id": "metric-custom-1781812686777",
+    "title": "CAC",
+    "value": "120€",
+    "type": "integer",
+    "chartType": "bar",
+    "formula": "Spesa / Clienti",
+    "data": [
+      160,
+      140,
+      120
+    ],
+    "labels": [
+      "Aprile",
+      "Maggio",
+      "Giugno"
+    ],
+    "apiEndpoint": null,
+    "isDefault": false,
+    "createdAt": "2026-06-18T19:58:06.777Z"
   }
 ]

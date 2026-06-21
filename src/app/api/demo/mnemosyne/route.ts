@@ -76,6 +76,7 @@ export async function GET(req: Request) {
             importance: entry.importance,
             scope: entry.scope,
             source: entry.source,
+            category: entry.category || 'general',
             createdAt: entry.createdAt,
           });
         }

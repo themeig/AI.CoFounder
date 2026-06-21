@@ -154,21 +154,24 @@ export default function SettingsPage() {
               desc: 'Pattern, Playbook, success rate',
             },
           ].map(item => (
-            <Link key={item.title} href={item.href}
-              className="group flex items-center gap-3 p-4 rounded-xl transition-all"
-              style={{ background: '#F8F9FA', border: '1px solid #E8EAED', textDecoration: 'none' }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = '#DADCE0'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(60,64,67,0.15)'; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8EAED'; e.currentTarget.style.boxShadow = 'none'; }}>
-              <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: item.bg }}>
-                {item.icon}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold" style={{ color: '#202124' }}>{item.title}</p>
-                <p className="text-xs" style={{ color: '#5F6368' }}>{item.desc}</p>
-              </div>
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 flex-shrink-0" style={{ color: '#DADCE0' }}>
-                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
-              </svg>
+            <Link key={item.title} href={item.href} passHref legacyBehavior>
+              <a
+                className="group flex items-center gap-3 p-4 rounded-xl transition-all"
+                style={{ background: '#F8F9FA', border: '1px solid #E8EAED', textDecoration: 'none' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#DADCE0'; e.currentTarget.style.boxShadow = '0 2px 6px rgba(60,64,67,0.15)'; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#E8EAED'; e.currentTarget.style.boxShadow = 'none'; }}
+              >
+                <div className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0" style={{ background: item.bg }}>
+                  {item.icon}
+                </div>
+                <div className="flex-1">
+                  <p className="text-sm font-semibold" style={{ color: '#202124' }}>{item.title}</p>
+                  <p className="text-xs" style={{ color: '#5F6368' }}>{item.desc}</p>
+                </div>
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 flex-shrink-0" style={{ color: '#DADCE0' }}>
+                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
+                </svg>
+              </a>
             </Link>
           ))}
         </div>

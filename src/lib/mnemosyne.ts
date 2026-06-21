@@ -31,6 +31,7 @@ export interface MemoryEntry {
   importance: number; // 1 to 5
   scope: 'local' | 'global';
   source: string; // agent type (e.g., 'tech', 'strategy')
+  category: string; // auto-categorization (e.g., 'identity', 'tech', 'business', 'finance', 'contacts', 'preferences', 'decisions', 'milestones')
   createdAt: string;
 }
 
@@ -40,7 +41,7 @@ export interface MemoryEntry {
 export async function remember(
   agentConfigId: string,
   content: string,
-  options: { importance?: number; scope?: 'local' | 'global'; source?: string } = {}
+  options: { importance?: number; scope?: 'local' | 'global'; source?: string; category?: string } = {}
 ): Promise<MemoryEntry> {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     throw new Error("Missing Supabase credentials for Mnemosyne.");
@@ -72,6 +73,7 @@ export async function remember(
     importance: options.importance ?? 3,
     scope: options.scope ?? 'local',
     source: options.source ?? config.type ?? 'unknown',
+    category: options.category ?? 'general',
     createdAt: new Date().toISOString(),
   };
 
@@ -231,6 +233,16 @@ CRITERI DI SELEZIONE:
 4. Determina lo scope:
    - "global": informazioni che sono utili a tutto il team di agenti (es. dati finanziari, email, tech stack globale, settore della startup).
    - "local": preferenze o dettagli specifici per il tipo di agente corrente "${agentType}" (es. preferenza per lo stile del codice o architettura per l'agente Tech, o preferenza per specifici canali di marketing per l'agente Marketing).
+5. Assegna una categoria (category) tra le seguenti:
+   - "identity": nomi, ruoli, informazioni personali del founder o del team
+   - "business": modello di business, settore, mercato, target, strategia, vision, mission
+   - "tech": tech stack, architettura, strumenti di sviluppo, infrastruttura
+   - "finance": budget, investimenti, revenue, spese, fundraising
+   - "contacts": email, numeri di telefono, link social, contatti importanti
+   - "preferences": gusti, preferenze operative, stile di lavoro, scelte ricorrenti
+   - "decisions": decisioni prese, milestone raggiunte, pivot effettuati
+   - "milestones": date chiave, scadenze, obiettivi temporali, launch dates
+   - "general": qualsiasi altra informazione che non rientra nelle categorie sopra
 
 Conversazione:
 Founder: "${userMessage}"
@@ -239,8 +251,9 @@ Assistente: "${assistantReply}"
 Rispondi ESCLUSIVAMENTE con un array JSON valido, senza blocchi di codice markdown, markdown o spiegazioni aggiuntive.
 Esempio di output:
 [
-  {"content": "Il founder preferisce l'architettura a microservizi", "importance": 4, "scope": "local"},
-  {"content": "Il lancio della beta è pianificato per settembre 2026", "importance": 5, "scope": "global"}
+  {"content": "Il founder si chiama Marco Rossi", "importance": 5, "scope": "global", "category": "identity"},
+  {"content": "Il founder preferisce l'architettura a microservizi", "importance": 4, "scope": "local", "category": "tech"},
+  {"content": "Il lancio della beta è pianificato per settembre 2026", "importance": 5, "scope": "global", "category": "milestones"}
 ]
 Se non c'è nulla da memorizzare, rispondi con un array vuoto: []`;
 
@@ -292,6 +305,7 @@ Se non c'è nulla da memorizzare, rispondi con un array vuoto: []`;
           importance: typeof item.importance === 'number' ? item.importance : 3,
           scope: item.scope === 'global' ? 'global' : 'local',
           source: agentType,
+          category: typeof item.category === 'string' ? item.category : 'general',
         });
         savedEntries.push(entry);
       }

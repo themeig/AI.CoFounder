@@ -9,17 +9,29 @@ export async function GET() {
       return NextResponse.json([]);
     }
 
-    const headers = {
+    const headers: Record<string, string> = {
       "apikey": SUPABASE_SERVICE_KEY,
       "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
+      "Range": "0-499",
+      "Range-Unit": "items",
+      "Prefer": "count=none",
     };
 
     const res = await fetch(
-      SUPABASE_URL + "/rest/v1/Playbook?select=*&order=successRate.desc&limit=20",
+      SUPABASE_URL + "/rest/v1/Playbook?select=*&order=successRate.desc",
       { headers }
     );
+
+    if (!res.ok) {
+      const errText = await res.text();
+      console.error("[Playbooks API] Supabase error:", res.status, errText);
+      return NextResponse.json([]);
+    }
+
     const data = await res.json();
-    return NextResponse.json(Array.isArray(data) ? data : []);
+    const playbooks = Array.isArray(data) ? data : [];
+    console.log(`[Playbooks API] Returned ${playbooks.length} playbooks from Supabase`);
+    return NextResponse.json(playbooks);
   } catch (err) {
     console.error("Playbooks error:", err);
     return NextResponse.json([]);

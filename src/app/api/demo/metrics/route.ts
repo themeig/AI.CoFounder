@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
-import path from "path";
+import * as path from "path";
 
 const METRICS_FILE_PATH = path.join(process.cwd(), "src/lib/custom-metrics.json");
 
@@ -92,7 +92,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { title, value, type, chartType, formula, data, labels, cohortData, apiEndpoint } = body;
+    const { title, value, type, chartType, formula, data, labels, cohortData, apiEndpoint, jsonPath, color } = body;
 
     if (!title || !value) {
       return NextResponse.json({ error: "Missing title or value" }, { status: 400 });
@@ -111,6 +111,8 @@ export async function POST(req: Request) {
       labels: Array.isArray(labels) ? labels : [],
       cohortData: Array.isArray(cohortData) ? cohortData : null,
       apiEndpoint: apiEndpoint || null,
+      jsonPath: jsonPath || null,
+      color: color || null,
       isDefault: false,
       createdAt: new Date().toISOString()
     };
@@ -131,7 +133,7 @@ export async function POST(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const body = await req.json();
-    const { id, title, value, type, chartType, formula, data, labels, cohortData, apiEndpoint } = body;
+    const { id, title, value, type, chartType, formula, data, labels, cohortData, apiEndpoint, jsonPath, color } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing id parameter" }, { status: 400 });
@@ -155,6 +157,8 @@ export async function PATCH(req: Request) {
       ...(labels !== undefined && { labels }),
       ...(cohortData !== undefined && { cohortData }),
       ...(apiEndpoint !== undefined && { apiEndpoint }),
+      ...(jsonPath !== undefined && { jsonPath }),
+      ...(color !== undefined && { color }),
     };
 
     currentMetrics[metricIndex] = updated;

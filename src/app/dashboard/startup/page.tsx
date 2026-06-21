@@ -22,24 +22,11 @@ export default function StartupPage() {
   const [analysis, setAnalysis] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
 
-  // Integration Configuration & Drawer states
-  const [showIntegrations, setShowIntegrations] = useState(false);
+  // Integration Configuration & Drawer states (Read-only for cards display)
   const [stripeConnected, setStripeConnected] = useState(false);
   const [mixpanelConnected, setMixpanelConnected] = useState(false);
   const [plaidConnected, setPlaidConnected] = useState(false);
-
-  const [stripeConnType, setStripeConnType] = useState("direct"); // "direct" or "proxy"
-  const [stripeKey, setStripeKey] = useState("sk_test_demo");
-  const [stripeUrl, setStripeUrl] = useState("");
-  const [mixpanelUrl, setMixpanelUrl] = useState("");
-  const [plaidUrl, setPlaidUrl] = useState("");
-
-  // Terminal Logs states
-  const [syncing, setSyncing] = useState(false);
-  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
   const [flashMetrics, setFlashMetrics] = useState(false);
-
-  const terminalEndRef = useRef<HTMLDivElement>(null);
 
   const loadStartupData = () => {
     fetch("/api/demo/startup")
@@ -49,43 +36,33 @@ export default function StartupPage() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+
+    // Load connection states from localStorage for displaying sources on cards
+    if (typeof window !== "undefined") {
+      setStripeConnected(localStorage.getItem("agentfoundry_integration_stripe_conn") === "true");
+      setMixpanelConnected(localStorage.getItem("agentfoundry_integration_mixpanel_conn") === "true");
+      setPlaidConnected(localStorage.getItem("agentfoundry_integration_plaid_conn") === "true");
+    }
   };
 
   useEffect(() => {
     loadStartupData();
 
+    const handleMetricsUpdated = () => {
+      loadStartupData();
+      setFlashMetrics(true);
+      setTimeout(() => setFlashMetrics(false), 1500);
+    };
+
     // Listen to global layout coFounder updates
-    window.addEventListener("startup-metrics-updated", loadStartupData);
+    window.addEventListener("startup-metrics-updated", handleMetricsUpdated);
     window.addEventListener("startup-agents-updated", loadStartupData);
 
-    // Initialize Integration URLs from localStorage or Defaults
-    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-    const storedStripeUrl = localStorage.getItem("agentfoundry_integration_stripe_url") || `${origin}/api/demo/sandbox/metrics?provider=stripe`;
-    const storedMixpanelUrl = localStorage.getItem("agentfoundry_integration_mixpanel_url") || `${origin}/api/demo/sandbox/metrics?provider=mixpanel`;
-    const storedPlaidUrl = localStorage.getItem("agentfoundry_integration_plaid_url") || `${origin}/api/demo/sandbox/metrics?provider=plaid`;
-
-    setStripeUrl(storedStripeUrl);
-    setMixpanelUrl(storedMixpanelUrl);
-    setPlaidUrl(storedPlaidUrl);
-
-    setStripeConnType(localStorage.getItem("agentfoundry_integration_stripe_conn_type") || "direct");
-    setStripeKey(localStorage.getItem("agentfoundry_integration_stripe_key") || "sk_test_demo");
-
-    setStripeConnected(localStorage.getItem("agentfoundry_integration_stripe_conn") === "true");
-    setMixpanelConnected(localStorage.getItem("agentfoundry_integration_mixpanel_conn") === "true");
-    setPlaidConnected(localStorage.getItem("agentfoundry_integration_plaid_conn") === "true");
-
     return () => {
-      window.removeEventListener("startup-metrics-updated", loadStartupData);
+      window.removeEventListener("startup-metrics-updated", handleMetricsUpdated);
       window.removeEventListener("startup-agents-updated", loadStartupData);
     };
   }, []);
-
-  useEffect(() => {
-    if (terminalEndRef.current) {
-      terminalEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [terminalLogs]);
 
   const handleToggleAgent = async (agentId: string, currentStatus: boolean) => {
     try {
@@ -101,74 +78,6 @@ export default function StartupPage() {
       if (Array.isArray(startupData) && startupData.length > 0) setStartup(startupData[0]);
     } catch (err) {
       console.error("Toggle agent error:", err);
-    }
-  };
-
-  const handleSaveIntegrations = () => {
-    localStorage.setItem("agentfoundry_integration_stripe_url", stripeUrl);
-    localStorage.setItem("agentfoundry_integration_mixpanel_url", mixpanelUrl);
-    localStorage.setItem("agentfoundry_integration_plaid_url", plaidUrl);
-
-    localStorage.setItem("agentfoundry_integration_stripe_conn_type", stripeConnType);
-    localStorage.setItem("agentfoundry_integration_stripe_key", stripeKey);
-
-    localStorage.setItem("agentfoundry_integration_stripe_conn", String(stripeConnected));
-    localStorage.setItem("agentfoundry_integration_mixpanel_conn", String(mixpanelConnected));
-    localStorage.setItem("agentfoundry_integration_plaid_conn", String(plaidConnected));
-
-    // Show a quick mock log when saved
-    setTerminalLogs((prev) => [
-      ...prev,
-      `[${new Date().toLocaleTimeString()}] Configurazione integrazioni salvata localmente.`
-    ]);
-  };
-
-  const handleSyncNow = async () => {
-    if (syncing) return;
-    setSyncing(true);
-    setTerminalLogs([`[${new Date().toLocaleTimeString()}] Avvio connessione socket e inizializzazione handshake...`]);
-
-    try {
-      const payload = {
-        stripeUrl: stripeConnected ? stripeUrl : null,
-        mixpanelUrl: mixpanelConnected ? mixpanelUrl : null,
-        plaidUrl: plaidConnected ? plaidUrl : null,
-        stripeConnType: stripeConnected ? stripeConnType : null,
-        stripeKey: stripeConnected ? stripeKey : null,
-      };
-
-      const res = await fetch("/api/demo/startup/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Sincronizzazione fallita");
-
-      // Typewriter effect to display server-side logs line by line
-      let currentLine = 0;
-      const interval = setInterval(() => {
-        if (currentLine < data.logs.length) {
-          setTerminalLogs((prev) => [...prev, data.logs[currentLine]]);
-          currentLine++;
-        } else {
-          clearInterval(interval);
-          setSyncing(false);
-          if (data.startup) {
-            setStartup(data.startup);
-            setFlashMetrics(true);
-            setTimeout(() => setFlashMetrics(false), 1500);
-          }
-        }
-      }, 250);
-    } catch (err: any) {
-      setTerminalLogs((prev) => [
-        ...prev,
-        `[${new Date().toLocaleTimeString()}] ERRORE: ${err.message}`,
-        `[${new Date().toLocaleTimeString()}] Sincronizzazione interrotta.`
-      ]);
-      setSyncing(false);
     }
   };
 
@@ -257,16 +166,6 @@ export default function StartupPage() {
             Gestisci le metriche, monitora le API in tempo reale e coordina il tuo team di agenti AI.
           </p>
         </div>
-        <button
-          onClick={() => setShowIntegrations(true)}
-          className="flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg border border-[#DADCE0] hover:bg-[#F8F9FA] transition"
-          style={{ color: '#1C3AA9', borderColor: '#C5D9F9', background: '#F4F7FE' }}
-        >
-          <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-            <path d="M19.14 12.94c.04-.3.06-.61.06-.94s-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-          </svg>
-          Configura API Metriche
-        </button>
       </div>
 
       {/* Grid Dashboard */}
@@ -561,255 +460,7 @@ export default function StartupPage() {
             </div>
           </div>
         </div>
-
       </div>
-
-      {/* Slide-over Integrations Configuration Panel */}
-      {showIntegrations && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
-          {/* Backdrop overlay */}
-          <div
-            onClick={() => {
-              handleSaveIntegrations();
-              setShowIntegrations(false);
-            }}
-            className="absolute inset-0 bg-black/30 backdrop-blur-sm transition-opacity"
-          />
-
-          {/* Drawer container */}
-          <div className="relative w-full max-w-md bg-white h-full shadow-2xl flex flex-col z-10 border-l border-[#E8EAED]" style={{ background: '#FFFFFF' }}>
-            {/* Drawer Header */}
-            <div className="px-6 py-4 flex items-center justify-between border-b border-[#E8EAED]" style={{ background: '#F8F9FA' }}>
-              <div>
-                <h3 className="font-bold text-sm" style={{ color: '#202124' }}>Integrazioni API Metriche</h3>
-                <p className="text-[11px]" style={{ color: '#5F6368' }}>Connetti e sincronizza dati finanziari ed operativi</p>
-              </div>
-              <button
-                onClick={() => {
-                  handleSaveIntegrations();
-                  setShowIntegrations(false);
-                }}
-                className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-[#E8EAED] transition text-[#5F6368]"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-              </button>
-            </div>
-
-            {/* Drawer Content */}
-            <div className="flex-1 overflow-y-auto p-6 space-y-6">
-              
-              {/* Stripe Connection Card */}
-              <div className="p-4 rounded-xl border border-[#E8EAED]" style={{ background: '#FFFFFF' }}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded bg-[#635BFF] flex items-center justify-center text-white text-[10px] font-bold">S</div>
-                    <span className="text-xs font-bold" style={{ color: '#202124' }}>Connessione Stripe</span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={stripeConnected}
-                      onChange={e => setStripeConnected(e.target.checked)}
-                      className="sr-only custom-switch"
-                    />
-                    <div className="w-7 h-4 rounded-full bg-[#DADCE0] transition-colors relative">
-                      <div className="switch-dot absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-[#FFFFFF] transition-transform" />
-                    </div>
-                  </label>
-                </div>
-                {stripeConnected && (
-                  <div className="space-y-3 mt-3 pt-3 border-t border-[#F1F3F4] animate-fade-in">
-                    <div>
-                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>TIPO DI CONNESSIONE</label>
-                      <select
-                        value={stripeConnType}
-                        onChange={e => setStripeConnType(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
-                        style={{ color: '#202124' }}
-                      >
-                        <option value="direct">Diretta (Official Stripe API)</option>
-                        <option value="proxy">Proxy (Custom JSON Endpoint)</option>
-                      </select>
-                    </div>
-
-                    {stripeConnType === "direct" ? (
-                      <div>
-                        <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>STRIPE SECRET KEY (sk_live_... / sk_test_...)</label>
-                        <input
-                          type="password"
-                          value={stripeKey}
-                          onChange={e => setStripeKey(e.target.value)}
-                          placeholder="sk_test_••••••••••••••••••••"
-                          className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
-                          style={{ color: '#202124' }}
-                        />
-                        <p className="text-[9px] mt-1" style={{ color: '#9AA0AC' }}>Usa "sk_test_demo" per attivare la simulazione Sandbox</p>
-                      </div>
-                    ) : (
-                      <>
-                        <div>
-                          <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>ENDPOINT URL (MRR & Utenti)</label>
-                          <input
-                            type="text"
-                            value={stripeUrl}
-                            onChange={e => setStripeUrl(e.target.value)}
-                            className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
-                            style={{ color: '#202124' }}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>STRIPE API MOCK KEY</label>
-                          <input
-                            type="password"
-                            value={stripeKey}
-                            onChange={e => setStripeKey(e.target.value)}
-                            placeholder="sk_test_••••••••••••••••••••"
-                            className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
-                            style={{ color: '#202124' }}
-                          />
-                        </div>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Mixpanel Connection Card */}
-              <div className="p-4 rounded-xl border border-[#E8EAED]" style={{ background: '#FFFFFF' }}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded bg-[#4F44E0] flex items-center justify-center text-white text-[10px] font-bold">M</div>
-                    <span className="text-xs font-bold" style={{ color: '#202124' }}>Connessione Mixpanel / GA</span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={mixpanelConnected}
-                      onChange={e => setMixpanelConnected(e.target.checked)}
-                      className="sr-only custom-switch"
-                    />
-                    <div className="w-7 h-4 rounded-full bg-[#DADCE0] transition-colors relative">
-                      <div className="switch-dot absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-[#FFFFFF] transition-transform" />
-                    </div>
-                  </label>
-                </div>
-                {mixpanelConnected && (
-                  <div className="space-y-3 mt-3 pt-3 border-t border-[#F1F3F4] animate-fade-in">
-                    <div>
-                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>ENDPOINT URL (Utenti Attivi)</label>
-                      <input
-                        type="text"
-                        value={mixpanelUrl}
-                        onChange={e => setMixpanelUrl(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
-                        style={{ color: '#202124' }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Plaid Connection Card */}
-              <div className="p-4 rounded-xl border border-[#E8EAED]" style={{ background: '#FFFFFF' }}>
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded bg-[#0A85EA] flex items-center justify-center text-white text-[10px] font-bold">P</div>
-                    <span className="text-xs font-bold" style={{ color: '#202124' }}>Connessione Plaid (Financial)</span>
-                  </div>
-                  <label className="relative inline-flex items-center cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={plaidConnected}
-                      onChange={e => setPlaidConnected(e.target.checked)}
-                      className="sr-only custom-switch"
-                    />
-                    <div className="w-7 h-4 rounded-full bg-[#DADCE0] transition-colors relative">
-                      <div className="switch-dot absolute top-0.5 left-0.5 w-3 h-3 rounded-full bg-[#FFFFFF] transition-transform" />
-                    </div>
-                  </label>
-                </div>
-                {plaidConnected && (
-                  <div className="space-y-3 mt-3 pt-3 border-t border-[#F1F3F4] animate-fade-in">
-                    <div>
-                      <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>ENDPOINT URL (Burn Rate & runway)</label>
-                      <input
-                        type="text"
-                        value={plaidUrl}
-                        onChange={e => setPlaidUrl(e.target.value)}
-                        className="w-full px-2.5 py-1.5 rounded text-xs border border-[#DADCE0] focus:outline-none"
-                        style={{ color: '#202124' }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Synchronize Logs console block */}
-              <div className="rounded-xl border border-[#3C4043] overflow-hidden" style={{ background: '#202124', color: '#F1F3F4' }}>
-                <div className="px-4 py-2 flex items-center justify-between border-b border-[#3C4043]" style={{ background: '#2B2D30' }}>
-                  <div className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-[#EA4335]" />
-                    <span className="w-2 h-2 rounded-full bg-[#F9AB00]" />
-                    <span className="w-2 h-2 rounded-full bg-[#34A853]" />
-                    <span className="text-[10px] font-mono ml-2 text-[#9AA0AC]">API Sync Console</span>
-                  </div>
-                  <span className="text-[9px] font-mono text-[#9AA0AC]">ready</span>
-                </div>
-                <div className="p-4 font-mono text-[10px] space-y-1.5 h-44 overflow-y-auto custom-scrollbar">
-                  {terminalLogs.map((log, index) => (
-                    <div key={index} className="leading-relaxed">
-                      {log.startsWith("ERROR") || log.includes("ERRORE") ? (
-                        <span className="text-[#F28B82]">{log}</span>
-                      ) : log.includes("completata") || log.includes("successo") ? (
-                        <span className="text-[#81C995]">{log}</span>
-                      ) : (
-                        <span>{log}</span>
-                      )}
-                    </div>
-                  ))}
-                  {terminalLogs.length === 0 && (
-                    <div className="text-[#9AA0AC] italic">Nessun log registrato. Avvia la sincronizzazione delle API abilitate.</div>
-                  )}
-                  {syncing && (
-                    <div className="flex items-center gap-1.5 text-[#81C995]">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#81C995] animate-ping" />
-                      <span>Connessione socket attiva, in attesa di dati...</span>
-                    </div>
-                  )}
-                  <div ref={terminalEndRef} />
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <button
-                  type="button"
-                  disabled={syncing || (!stripeConnected && !mixpanelConnected && !plaidConnected)}
-                  onClick={() => {
-                    handleSaveIntegrations();
-                    handleSyncNow();
-                  }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold rounded-lg text-white transition disabled:opacity-50"
-                  style={{ background: '#34A853', boxShadow: '0 1px 2px rgba(52,168,83,0.3)' }}
-                >
-                  {syncing ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      Sincronizzazione in corso...
-                    </>
-                  ) : (
-                    <>
-                      <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M19 8l-4 4h3c0 3.31-2.69 6-6 6-1.01 0-1.97-.25-2.8-.7l-1.46 1.46C8.97 19.54 10.43 20 12 20c4.42 0 8-3.58 8-8h3l-4-4zM6 12c0-3.31 2.69-6 6-6 1.01 0 1.97.25 2.8.7l1.46-1.46C15.03 4.46 13.57 4 12 4c-4.42 0-8 3.58-8 8H1l4 4 4-4H6z"/></svg>
-                      Sincronizza Ora
-                    </>
-                  )}
-                </button>
-              </div>
-
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }

@@ -16,11 +16,20 @@ const navItems = [
     ),
   },
   {
-    href: "/dashboard/agents",
-    label: "Agenti AI",
+    href: "/dashboard/cofounder",
+    label: "CoFounder",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
-        <path d="M20 9V7c0-1.1-.9-2-2-2h-3c0-1.66-1.34-3-3-3S9 3.34 9 5H6c-1.1 0-2 .9-2 2v2c-1.66 0-3 1.34-3 3s1.34 3 3 3v4c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2v-4c1.66 0 3-1.34 3-3s-1.34-3-3-3zm-2 10H6V7h12v12zm-9-6c-.83 0-1.5-.67-1.5-1.5S8.17 10 9 10s1.5.67 1.5 1.5S9.83 13 9 13zm7.5-1.5c0 .83-.67 1.5-1.5 1.5s-1.5-.67-1.5-1.5.67-1.5 1.5-1.5 1.5.67 1.5 1.5zM8 15h8v2H8v-2z"/>
+        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+      </svg>
+    ),
+  },
+  {
+    href: "/dashboard/agents",
+    label: "Dipendenti",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
       </svg>
     ),
   },
@@ -62,230 +71,46 @@ const navItems = [
   },
 ];
 
-interface CofounderMessage {
-  role: "user" | "assistant";
-  content: string;
-  timestamp: string;
-  tools?: { name: string; success: boolean; details: string }[];
-}
-
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);
   const [demoUser, setDemoUser] = useState<any>(null);
 
-  // ── coFounder Assistant ──────────────────────────────────────────
-  const [showCofounder, setShowCofounder] = useState(false);
-  const [cofounderName, setCofounderName] = useState("coFounder");
-  const [cofounderInput, setCofounderInput] = useState("");
-  const [cofounderMessages, setCofounderMessages] = useState<CofounderMessage[]>([]);
-  const [cofounderLoading, setCofounderLoading] = useState(false);
-  const cofounderChatEndRef = useRef<HTMLDivElement>(null);
-
-  // ── Sidebar collapse & resize ────────────────────────────────────
+  // ── Sidebar collapse ─────────────────────────────────────────────
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sidebarWidth, setSidebarWidth] = useState(200); // Fixed expanded width of 200px
   const [logoHovered, setLogoHovered] = useState(false);
-  const isResizingRef = useRef(false);
-  const startXRef = useRef(0);
-  const startWidthRef = useRef(200);
-  const asideRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const stored = localStorage.getItem("agentfoundry_global_sidebar");
     if (stored) {
       try {
-        const { collapsed, width } = JSON.parse(stored);
+        const { collapsed } = JSON.parse(stored);
         if (typeof collapsed === "boolean") setSidebarCollapsed(collapsed);
-        if (typeof width === "number") {
-          // Clamp stored width to 200px
-          const clamped = Math.max(200, Math.min(200, width));
-          setSidebarWidth(clamped);
-        }
       } catch {}
-    } else {
-      setSidebarWidth(200);
     }
   }, []);
 
-  // Load coFounder settings and chat
   useEffect(() => {
-    const checkSettings = () => {
-      const stored = localStorage.getItem("agentfoundry_settings");
-      if (stored) {
-        try {
-          const parsed = JSON.parse(stored);
-          if (parsed.cofounderName) setCofounderName(parsed.cofounderName);
-        } catch {}
+    const handleCollapseGlobalSidebar = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (typeof customEvent.detail === "boolean") {
+        setSidebarCollapsed(customEvent.detail);
       }
     };
-    checkSettings();
-    window.addEventListener("storage", checkSettings);
-    const interval = setInterval(checkSettings, 1000);
+    window.addEventListener("collapse-global-sidebar", handleCollapseGlobalSidebar);
     return () => {
-      window.removeEventListener("storage", checkSettings);
-      clearInterval(interval);
+      window.removeEventListener("collapse-global-sidebar", handleCollapseGlobalSidebar);
     };
   }, []);
-
-  useEffect(() => {
-    const storedChat = sessionStorage.getItem("agentfoundry_cofounder_chat");
-    if (storedChat) {
-      try {
-        setCofounderMessages(JSON.parse(storedChat));
-      } catch {}
-    } else {
-      setCofounderMessages([
-        {
-          role: "assistant",
-          content: `Ciao! Sono il tuo ${cofounderName}, l'assistente co-fondatore del tuo progetto. Posso aiutarti a gestire il team, creare agenti o aggiornare le metriche della startup in tempo reale. Cosa facciamo oggi?`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
-    }
-  }, [cofounderName]);
-
-  useEffect(() => {
-    if (cofounderChatEndRef.current) {
-      cofounderChatEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [cofounderMessages, cofounderLoading]);
-
-  const saveCofounderChat = (msgs: CofounderMessage[]) => {
-    sessionStorage.setItem("agentfoundry_cofounder_chat", JSON.stringify(msgs));
-  };
-
-  const handleSendCofounderMessage = async (e?: React.FormEvent, customText?: string) => {
-    if (e) e.preventDefault();
-    const textToSend = customText || cofounderInput;
-    if (!textToSend.trim() || cofounderLoading) return;
-
-    const userMsg: CofounderMessage = {
-      role: "user",
-      content: textToSend,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-
-    const newMsgs = [...cofounderMessages, userMsg];
-    setCofounderMessages(newMsgs);
-    saveCofounderChat(newMsgs);
-    if (!customText) setCofounderInput("");
-    setCofounderLoading(true);
-
-    try {
-      const res = await fetch("/api/demo/cofounder/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          messages: newMsgs.map(m => ({ role: m.role, content: m.content })),
-          cofounderName
-        })
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Errore di connessione");
-
-      const assistantMsg: CofounderMessage = {
-        role: "assistant",
-        content: data.content,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        tools: data.executedTools || []
-      };
-
-      const finalMsgs = [...newMsgs, assistantMsg];
-      setCofounderMessages(finalMsgs);
-      saveCofounderChat(finalMsgs);
-
-      // UX Integration Event dispatch: refresh other page components in real-time
-      if (data.executedTools && data.executedTools.length > 0) {
-        window.dispatchEvent(new Event("startup-metrics-updated"));
-        window.dispatchEvent(new Event("startup-agents-updated"));
-      }
-    } catch (err: any) {
-      const errMsg: CofounderMessage = {
-        role: "assistant",
-        content: `Scusa, ho riscontrato un errore: ${err.message}`,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      const finalMsgs = [...newMsgs, errMsg];
-      setCofounderMessages(finalMsgs);
-      saveCofounderChat(finalMsgs);
-    } finally {
-      setCofounderLoading(false);
-    }
-  };
 
   const toggleSidebar = () => {
     const next = !sidebarCollapsed;
     setSidebarCollapsed(next);
     localStorage.setItem(
       "agentfoundry_global_sidebar",
-      JSON.stringify({ collapsed: next, width: sidebarWidth })
+      JSON.stringify({ collapsed: next })
     );
-  };
-
-  const handleResizeMouseDown = (e: React.MouseEvent) => {
-    isResizingRef.current = true;
-    startXRef.current = e.clientX;
-    startWidthRef.current = sidebarCollapsed ? 52 : sidebarWidth;
-    e.preventDefault();
-
-    // Disable transitions during drag to avoid lag
-    if (asideRef.current) {
-      asideRef.current.style.transition = "none";
-    }
-
-    let wasCollapsed = sidebarCollapsed;
-
-    const handleMouseMove = (ev: MouseEvent) => {
-      if (!isResizingRef.current) return;
-      const delta = ev.clientX - startXRef.current;
-      const computedWidth = startWidthRef.current + delta;
-
-      // Snap to collapsed if dragged below 130px, otherwise allow smooth resize up to 200px
-      const isCollapsedNow = computedWidth < 130;
-      const newWidth = isCollapsedNow ? 52 : Math.max(130, Math.min(200, computedWidth));
-
-      if (asideRef.current) {
-        asideRef.current.style.width = `${newWidth}px`;
-      }
-
-      if (isCollapsedNow !== wasCollapsed) {
-        wasCollapsed = isCollapsedNow;
-        setSidebarCollapsed(isCollapsedNow);
-      }
-    };
-
-    const handleMouseUp = (ev: MouseEvent) => {
-      isResizingRef.current = false;
-      const delta = ev.clientX - startXRef.current;
-      const computedWidth = startWidthRef.current + delta;
-      
-      const isCollapsedNow = computedWidth < 130;
-      const finalWidth = isCollapsedNow ? 52 : 200; // Snap cleanly back to exactly 200px if expanded
-
-      // Restore transition
-      if (asideRef.current) {
-        asideRef.current.style.transition = "";
-      }
-
-      setSidebarWidth(finalWidth);
-      setSidebarCollapsed(isCollapsedNow);
-      localStorage.setItem(
-        "agentfoundry_global_sidebar",
-        JSON.stringify({ collapsed: isCollapsedNow, width: finalWidth })
-      );
-      document.removeEventListener("mousemove", handleMouseMove);
-      document.removeEventListener("mouseup", handleMouseUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-
-    document.body.style.cursor = "col-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("mousemove", handleMouseMove);
-    document.addEventListener("mouseup", handleMouseUp);
   };
 
   useEffect(() => {
@@ -318,10 +143,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <div className="min-h-screen flex" style={{ background: "#F8F9FA" }}>
       {/* ── Left Sidebar ─────────────────────────────────────────── */}
       <aside
-        ref={asideRef}
         className="flex flex-col flex-shrink-0 h-screen sticky top-0 transition-all duration-200"
         style={{
-          width: sidebarCollapsed ? "52px" : `${sidebarWidth}px`,
+          width: sidebarCollapsed ? "52px" : "200px",
           minWidth: sidebarCollapsed ? "52px" : "200px",
           background: "#FFFFFF",
           borderRight: "1px solid #E8EAED",
@@ -393,7 +217,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Navigation */}
         <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto custom-scrollbar">
           {navItems.map((item) => {
-            const isActive = pathname === item.href;
+            const isActive = pathname.startsWith(item.href) && (item.href !== "/dashboard" || pathname === "/dashboard");
             return (
               <Link
                 key={item.href}
@@ -485,174 +309,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </div>
       </aside>
 
-      {/* ── Drag-Resize Handle ──────────────────────────────────────────── */}
-      <div
-        onMouseDown={handleResizeMouseDown}
-        className="flex-shrink-0 flex items-center justify-center group"
-        style={{
-          width: "6px",
-          cursor: "col-resize",
-          background: "transparent",
-          position: "relative",
-          zIndex: 10,
-          transition: "background 0.15s",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.background = "#E8EAED")}
-        onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-        title="Trascina per ridimensionare"
-      >
-        {/* Grip dots */}
-        {!sidebarCollapsed && (
-          <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-            {[0, 1, 2].map((i) => (
-              <div key={i} className="w-1 h-1 rounded-full" style={{ background: "#9AA0AC" }} />
-            ))}
-          </div>
-        )}
-      </div>
-
       {/* ── Main Content ──────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto h-screen custom-scrollbar" style={{ background: "#F8F9FA" }}>
         {children}
       </main>
-
-      {/* ── coFounder Floating Button ─────────────────────────────── */}
-      <button
-        onClick={() => setShowCofounder(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center text-white shadow-2xl transition-transform hover:scale-105 z-40 animate-bounce"
-        style={{
-          background: 'linear-gradient(135deg, #1A73E8, #34A853)',
-          boxShadow: '0 8px 24px rgba(26,115,232,0.3)',
-          animationDuration: '3s'
-        }}
-        title={`Apri ${cofounderName}`}
-      >
-        <svg viewBox="0 0 24 24" fill="currentColor" className="w-6 h-6">
-          <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/>
-        </svg>
-        <span className="absolute inset-0 rounded-full bg-[#1A73E8] animate-ping opacity-25" style={{ animationDuration: '2s' }} />
-      </button>
-
-      {/* ── coFounder Slide-out Drawer ───────────────────────────── */}
-      {showCofounder && (
-        <div className="fixed inset-0 z-50 overflow-hidden flex justify-end">
-          <div
-            onClick={() => setShowCofounder(false)}
-            className="absolute inset-0 bg-black/20 backdrop-blur-xs transition-opacity"
-          />
-
-          <div
-            className="relative w-full max-w-sm bg-white h-full shadow-2xl flex flex-col z-10 border-l border-[#E8EAED] animate-slide-in"
-            style={{
-              background: 'rgba(255, 255, 255, 0.97)',
-              backdropFilter: 'blur(12px)'
-            }}
-          >
-            <div className="px-5 py-4 flex items-center justify-between border-b border-[#E8EAED]" style={{ background: '#F8F9FA' }}>
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-9 h-9 rounded-xl flex items-center justify-center text-xs font-bold text-white relative"
-                  style={{ background: 'linear-gradient(135deg, #1A73E8, #34A853)' }}
-                >
-                  CF
-                  <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[#34A853] border-2 border-white" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-xs" style={{ color: '#202124' }}>{cofounderName}</h3>
-                  <p className="text-[10px]" style={{ color: '#9AA0AC' }}>Co-Founder Virtual Partner · Attivo</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowCofounder(false)}
-                className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-[#E8EAED] transition text-[#5F6368]"
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-              </button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar" style={{ background: '#FAFAFA' }}>
-              {cofounderMessages.map((msg, index) => (
-                <div key={index} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
-                  <div
-                    className="max-w-[85%] rounded-2xl px-3.5 py-2.5 text-xs leading-relaxed"
-                    style={{
-                      background: msg.role === 'user' ? '#E8F0FE' : '#FFFFFF',
-                      color: '#202124',
-                      border: msg.role === 'user' ? 'none' : '1px solid #E8EAED',
-                      boxShadow: msg.role === 'user' ? 'none' : '0 1px 2px rgba(60,64,67,0.05)'
-                    }}
-                  >
-                    <p className="whitespace-pre-wrap">{msg.content}</p>
-
-                    {msg.tools && msg.tools.length > 0 && (
-                      <div className="mt-2.5 pt-2 border-t border-[#F1F3F4] space-y-1.5 animate-fade-in">
-                        {msg.tools.map((t, i) => (
-                          <div key={i} className="flex items-center gap-1.5 text-[9px] font-semibold text-[#137333] bg-[#E6F4EA] px-2 py-1 rounded border border-[#CEEAD6]">
-                            <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5 flex-shrink-0"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                            <span>🔧 {t.details}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <span className="text-[8px] mt-1 px-1" style={{ color: '#9AA0AC' }}>{msg.timestamp}</span>
-                </div>
-              ))}
-
-              {cofounderLoading && (
-                <div className="flex flex-col items-start animate-fade-in">
-                  <div className="flex gap-1.5 items-center px-4 py-3 bg-white rounded-2xl border border-[#E8EAED]">
-                    <span className="w-2 h-2 bg-[#DADCE0] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-                    <span className="w-2 h-2 bg-[#DADCE0] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-                    <span className="w-2 h-2 bg-[#DADCE0] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
-                  </div>
-                </div>
-              )}
-              <div ref={cofounderChatEndRef} />
-            </div>
-
-            {cofounderMessages.length <= 1 && !cofounderLoading && (
-              <div className="px-4 py-2 flex flex-wrap gap-1.5 bg-[#FAFAFA]" style={{ borderTop: '1px solid #F1F3F4' }}>
-                {[
-                  "Crea agente Strategy",
-                  "Quali sono le metriche?",
-                  "Imposta MRR a 15000",
-                ].map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => handleSendCofounderMessage(undefined, s)}
-                    className="px-2.5 py-1 rounded-full text-[10px] font-semibold border border-[#E8EAED] hover:bg-[#F1F3F4] transition"
-                    style={{ color: '#5F6368', background: '#FFFFFF' }}
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
-
-            <form onSubmit={handleSendCofounderMessage} className="p-3 border-t border-[#E8EAED] flex items-center gap-2" style={{ background: '#FFFFFF' }}>
-              <input
-                type="text"
-                value={cofounderInput}
-                onChange={e => setCofounderInput(e.target.value)}
-                placeholder={`Scrivi a ${cofounderName}...`}
-                className="flex-1 px-3 py-2 rounded-xl text-xs bg-[#F8F9FA] border border-[#E8EAED] focus:outline-none"
-                style={{ color: '#202124' }}
-              />
-              <button
-                type="submit"
-                disabled={cofounderLoading || !cofounderInput.trim()}
-                className="w-8 h-8 rounded-xl flex items-center justify-center text-white transition disabled:opacity-40"
-                style={{ background: '#1A73E8' }}
-              >
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                  <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                </svg>
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
