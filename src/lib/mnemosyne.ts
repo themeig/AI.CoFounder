@@ -1,3 +1,5 @@
+import { generateEmbedding } from "./embeddings";
+
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || "";
@@ -16,6 +18,7 @@ async function supabaseFetch(path: string, options: any = {}) {
     headers: {
       ...supabaseHeaders,
       ...options.headers,
+      ...options.headers,
     },
   });
   if (!response.ok) {
@@ -31,12 +34,13 @@ export interface MemoryEntry {
   importance: number; // 1 to 5
   scope: 'local' | 'global';
   source: string; // agent type (e.g., 'tech', 'strategy')
-  category: string; // auto-categorization (e.g., 'identity', 'tech', 'business', 'finance', 'contacts', 'preferences', 'decisions', 'milestones')
+  category: string; // auto-categorization
   createdAt: string;
 }
 
 /**
- * Saves a new fact/memory into the AgentConfig JSONB settings field.
+ * Saves a new fact/memory into the AgentConfig JSONB settings field (for backup)
+ * and additionally into the VectorMemory pgvector table.
  */
 export async function remember(
   agentConfigId: string,
@@ -79,18 +83,51 @@ export async function remember(
 
   settings.mnemosyne.push(newEntry);
 
-  // 3. Patch settings back to the DB
-  await supabaseFetch(`/AgentConfig?id=eq.${agentConfigId}`, {
-    method: "PATCH",
-    body: JSON.stringify({ settings }),
-  });
+  // 3. Patch settings back to the DB (classic JSONB backup)
+  try {
+    await supabaseFetch(`/AgentConfig?id=eq.${agentConfigId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ settings }),
+    });
+  } catch (err: any) {
+    console.error("[Mnemosyne] JSONB patch failed:", err.message);
+  }
+
+  // 4. Save to VectorMemory table (pgvector)
+  try {
+    let embeddingVector: number[] | null = null;
+    try {
+      embeddingVector = await generateEmbedding(content);
+    } catch (embErr: any) {
+      console.warn("[Mnemosyne] Could not generate embedding for memory:", embErr.message);
+    }
+
+    await supabaseFetch(`/VectorMemory`, {
+      method: "POST",
+      body: JSON.stringify({
+        id: newEntry.id,
+        agentConfigId: agentConfigId,
+        content: content.trim(),
+        embedding: embeddingVector,
+        importance: newEntry.importance,
+        scope: newEntry.scope,
+        category: newEntry.category,
+        createdAt: newEntry.createdAt,
+        updatedAt: newEntry.createdAt,
+      }),
+    });
+    console.log(`[Mnemosyne] Saved vector memory in VectorMemory table.`);
+  } catch (vecErr: any) {
+    console.error("[Mnemosyne] Error saving memory in VectorMemory table:", vecErr.message);
+  }
 
   console.log(`[Mnemosyne] Saved memory in agent ${agentConfigId}: "${newEntry.content}" (scope: ${newEntry.scope}, importance: ${newEntry.importance})`);
   return newEntry;
 }
 
 /**
- * Retrieves the most relevant memories for a query using keyword-based similarity.
+ * Retrieves the most relevant memories for a query using semantic vector search,
+ * falling back to keyword-based similarity if not configured.
  */
 export async function recall(
   agentConfigId: string,
@@ -103,6 +140,40 @@ export async function recall(
     return [];
   }
 
+  // --- 1. Try Vector Semantic Recall (Supabase pgvector RPC) ---
+  try {
+    console.log(`[Mnemosyne] Attempting vector semantic recall for: "${query}"`);
+    const queryEmbedding = await generateEmbedding(query);
+    
+    const results = await supabaseFetch(`/rpc/match_memories`, {
+      method: "POST",
+      body: JSON.stringify({
+        query_embedding: queryEmbedding,
+        match_threshold: 0.35, // Minimum similarity threshold
+        match_count: top_k,
+        filter_agent_config_id: agentConfigId,
+        filter_scope: "all"
+      })
+    });
+
+    if (Array.isArray(results) && results.length > 0) {
+      console.log(`[Mnemosyne] Vector recall matched ${results.length} memories.`);
+      return results.map((r: any) => ({
+        id: r.id,
+        content: r.content,
+        importance: r.importance,
+        scope: r.scope as 'local' | 'global',
+        source: agentConfigId,
+        category: r.category || 'general',
+        createdAt: r.createdAt,
+      }));
+    }
+    console.log("[Mnemosyne] Vector recall returned 0 matches; falling back to lexical search.");
+  } catch (vecErr: any) {
+    console.warn("[Mnemosyne] Vector recall failed or not set up yet:", vecErr.message, "; falling back to lexical search.");
+  }
+
+  // --- 2. Fallback: Classic Lexical Search (Keyword-based recall from JSONB) ---
   // 1. Get current AgentConfig to retrieve startupId
   const configs = await supabaseFetch(`/AgentConfig?id=eq.${agentConfigId}&select=startupId`);
   if (!configs || configs.length === 0) return [];
@@ -142,7 +213,6 @@ export async function recall(
   if (candidates.length === 0) return [];
 
   // 4. Tokenize the query
-  // Stopwords list to filter out high-frequency noise words
   const stopWords = new Set([
     "il", "lo", "la", "i", "gli", "le", "un", "una", "uno", "di", "a", "da", "in", "con", "su", "per", "tra", "fra",
     "del", "dello", "della", "dei", "degli", "delle", "al", "allo", "alla", "ai", "agli", "alle",
@@ -158,7 +228,6 @@ export async function recall(
     .filter(w => w.length > 2 && !stopWords.has(w));
 
   if (queryWords.length === 0) {
-    // If no query terms remaining, return top_k sorted by importance and recency
     return candidates
       .sort((a, b) => b.importance - a.importance || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, top_k);
@@ -172,7 +241,6 @@ export async function recall(
     for (const qWord of queryWords) {
       if (contentLower.includes(qWord)) {
         matchCount += 1.0;
-        // Exact word boundary boost
         const regex = new RegExp(`\\b${qWord}\\b`, 'i');
         if (regex.test(contentLower)) {
           matchCount += 0.5;
@@ -184,14 +252,10 @@ export async function recall(
       return { entry, score: 0 };
     }
 
-    // Calculate recency factor
     const elapsedMs = Date.now() - new Date(entry.createdAt).getTime();
     const elapsedDays = Math.max(0, elapsedMs / (1000 * 60 * 60 * 24));
     const recencyFactor = 1 / (1 + elapsedDays * recencyBias);
-
-    // Importance factor (1 to 5 -> 1.0 to 1.6)
     const importanceFactor = 1 + (entry.importance - 1) * 0.15;
-
     const score = matchCount * importanceFactor * recencyFactor;
     return { entry, score };
   });
@@ -203,6 +267,7 @@ export async function recall(
     .map(item => item.entry)
     .slice(0, top_k);
 }
+
 
 /**
  * Uses LLM to extract new key facts and preferences from a chat completion turn and remembers them.

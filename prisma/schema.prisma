@@ -80,16 +80,17 @@ model Startup {
 }
 
 model AgentConfig {
-  id          String   @id @default(cuid())
-  startupId   String
-  startup     Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
-  type        String
-  name        String
-  isActive    Boolean  @default(true)
-  settings    Json?
-  messages    Message[]
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id             String         @id @default(cuid())
+  startupId      String
+  startup        Startup        @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  type           String
+  name           String
+  isActive       Boolean        @default(true)
+  settings       Json?
+  messages       Message[]
+  vectorMemories VectorMemory[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 }
 
 model Message {
@@ -134,6 +135,7 @@ model Pattern {
   id          String   @id @default(cuid())
   title       String
   description String   @db.Text
+  embedding   Unsupported("vector(1536)")?
   sector      String?
   phase       String?
   conditions  Json     @default("{}")
@@ -182,4 +184,18 @@ model Recommendation {
   isActedOn   Boolean  @default(false)
   createdAt   DateTime @default(now())
   @@index([startupId, isRead])
+}
+
+model VectorMemory {
+  id            String      @id @default(cuid())
+  agentConfigId String
+  agentConfig   AgentConfig @relation(fields: [agentConfigId], references: [id], onDelete: Cascade)
+  content       String      @db.Text
+  embedding     Unsupported("vector(1536)")?
+  importance    Int         @default(3)
+  scope         String      @default("local")
+  category      String      @default("general")
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+  @@index([agentConfigId])
 }
