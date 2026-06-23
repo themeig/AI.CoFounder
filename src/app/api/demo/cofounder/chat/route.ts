@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import * as path from "path";
+import { getApiKey } from "@/lib/secure-store";
 import { exec } from "child_process";
 import * as os from "os";
+import { getArtifacts, saveArtifacts, Artifact } from "@/lib/custom-artifacts";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -74,6 +76,34 @@ async function searchWeb(query: string): Promise<any[]> {
   } catch (err: any) { return [{ title: "Search Failed", snippet: err.message, link: "" }]; }
 }
 
+async function searchTavily(query: string, apiKey: string): Promise<any[]> {
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: query,
+        max_results: 5,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Tavily API responded with status ${res.status}`);
+    }
+    const data = await res.json();
+    return (data.results || []).map((r: any) => ({
+      title: r.title,
+      snippet: r.content,
+      link: r.url,
+    }));
+  } catch (err: any) {
+    console.error("Tavily search error:", err);
+    throw err;
+  }
+}
+
 async function readWebPage(url: string): Promise<string> {
   try {
     if (!url.startsWith("http://") && !url.startsWith("https://")) return "Error: Invalid URL.";
@@ -89,75 +119,7 @@ async function readWebPage(url: string): Promise<string> {
   } catch (err: any) { return `Error: ${err.message}`; }
 }
 
-async function executePython(code: string): Promise<string> {
-  const tempDir = os.tmpdir();
-  const fileName = `script_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.py`;
-  const filePath = path.join(tempDir, fileName);
-  
-  try {
-    await fs.writeFile(filePath, code, "utf-8");
-    
-    return new Promise((resolve) => {
-      exec(`python "${filePath}"`, { timeout: 15000 }, (error, stdout, stderr) => {
-        if (error && (error.message.includes("not found") || error.message.includes("is not recognized"))) {
-          // Fallback to 'py' command on Windows if 'python' isn't explicitly found
-          exec(`py "${filePath}"`, { timeout: 15000 }, (error2, stdout2, stderr2) => {
-            fs.unlink(filePath).catch(() => {});
-            if (error2) {
-              resolve(`Error executing Python: is Python installed on the host?\n${stderr2 || error2.message}`);
-            } else {
-              resolve(stdout2 || "Execution finished with no output.");
-            }
-          });
-        } else {
-          fs.unlink(filePath).catch(() => {});
-          if (error) {
-            resolve(`Error:\n${stderr || error.message}`);
-          } else {
-            resolve(stdout || "Execution finished with no output.");
-          }
-        }
-      });
-    });
-  } catch (err: any) {
-    return `Error creating script: ${err.message}`;
-  }
-}
-
-async function executeTypeScript(code: string): Promise<string> {
-  const tempDir = os.tmpdir();
-  const fileName = `script_${Date.now()}_${Math.random().toString(36).substring(2, 7)}.js`;
-  const filePath = path.join(tempDir, fileName);
-  
-  try {
-    // Rimuovi tipi ed interfacce typescript per eseguirlo come JS in node
-    const cleanCode = code
-      .replace(/interface\s+\w+\s*\{[^}]*\}/g, '')
-      .replace(/type\s+\w+\s*=[^;]+/g, '')
-      .replace(/\b(private|public|protected|readonly)\b/g, '')
-      .replace(/:\s*(number|string|boolean|any|void|object|unknown|never|undefined|null|Function|Array<[^>]+>|[A-Z]\w*(?!\.)(?:\[\])?)\b(?!['"`])/g, '')
-      .replace(/\s+as\s+(number|string|boolean|any|void|object|unknown|never|undefined|null|[A-Z]\w*)/g, '')
-      .replace(/<[A-Z]>/g, '')
-      .replace(/export\s+/g, '')
-      .replace(/import\s+[\s\S]*?\s+from\s+['"][^'"]+['"];?/g, '')
-      .replace(/import\s+['"][^'"]+['"];?/g, '');
-
-    await fs.writeFile(filePath, cleanCode, "utf-8");
-    
-    return new Promise((resolve) => {
-      exec(`node "${filePath}"`, { timeout: 15000 }, (error, stdout, stderr) => {
-        fs.unlink(filePath).catch(() => {});
-        if (error) {
-          resolve(`Error:\n${stderr || error.message}`);
-        } else {
-          resolve(stdout || "Execution finished with no output.");
-        }
-      });
-    });
-  } catch (err: any) {
-    return `Error creating script: ${err.message}`;
-  }
-}
+import { executePython, executeTypeScript } from "@/lib/sandbox-runner";
 
 function getAgentSystemPrompt(agentType: string): string {
   const prompts: Record<string, string> = {
@@ -173,7 +135,17 @@ function getAgentSystemPrompt(agentType: string): string {
 
 async function callAgentInternal(agentType: string, task: string, context: string, startup: any): Promise<{ response: string; success: boolean }> {
   try {
-    const systemPrompt = `${getAgentSystemPrompt(agentType)}
+    let basePrompt = getAgentSystemPrompt(agentType);
+    try {
+      const dbConfigs = await supabaseFetch(`/AgentConfig?startupId=eq.${startup.id}&type=eq.${agentType}&isActive=eq.true`);
+      if (dbConfigs && dbConfigs.length > 0 && dbConfigs[0].settings?.systemPrompt) {
+        basePrompt = dbConfigs[0].settings.systemPrompt;
+      }
+    } catch (dbErr) {
+      console.error("Error loading agent settings for internal call:", dbErr);
+    }
+
+    const systemPrompt = `${basePrompt}
 
 Informazioni Startup (${startup.name}):
 - Settore: ${startup.sector} | Fase: ${startup.phase}
@@ -226,7 +198,8 @@ const TOOLS = [
         properties: {
           agentType: { type: "string", enum: ["strategy", "tech", "finance", "marketing", "legal", "operations"] },
           task: { type: "string", description: "Task specifico da assegnare all'agente." },
-          context: { type: "string", description: "Contesto aggiuntivo opzionale." }
+          context: { type: "string", description: "Contesto aggiuntivo opzionale." },
+          visibleToUser: { type: "boolean", description: "Imposta su true se la risposta dettagliata e completa del subagente deve essere mostrata al founder. Imposta su false se la risposta serve solo a te internamente per formulare la risposta finale e non deve essere visualizzata direttamente in chiaro dal founder." }
         },
         required: ["agentType", "task"]
       }
@@ -272,14 +245,31 @@ const TOOLS = [
     type: "function",
     function: {
       name: "createAgent",
-      description: "Crea un nuovo agente nel team. Usa SOLO dopo conferma esplicita del fondatore.",
+      description: "Crea un nuovo agente specializzato nel team con istruzioni personalizzate (systemPrompt), personalità e competenze specifiche. Usa SOLO dopo conferma esplicita del fondatore.",
       parameters: {
         type: "object",
         properties: {
-          name: { type: "string" },
-          type: { type: "string", enum: ["strategy", "tech", "finance", "marketing", "legal", "operations"] }
+          name: { type: "string", description: "Il nome dell'agente (es: 'Michele Boldrin' o 'CTO Advisor')." },
+          type: { type: "string", enum: ["strategy", "tech", "finance", "marketing", "legal", "operations"], description: "La categoria / dipartimento dell'agente." },
+          systemPrompt: { type: "string", description: "Prompt di sistema / istruzioni dettagliate per definire il comportamento, focus, tono e stile di risposta (es: 'Sei Michele Boldrin...')." },
+          persona: { type: "string", description: "Profilo descrittivo, background ed attitudine dell'agente." },
+          expertise: { type: "string", description: "Elenco di competenze chiave (es: ' fundraising, unit economics')." }
         },
         required: ["name", "type"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "deleteAgent",
+      description: "Elimina permanentemente un agente specializzato dal team inserendo il suo ID. Usa questo tool per rimuovere duplicati o agenti non più necessari. Chiama sempre getActiveAgents prima per recuperare l'ID esatto dell'agente.",
+      parameters: {
+        type: "object",
+        properties: {
+          agentId: { type: "string", description: "L'ID univoco dell'agente da eliminare (es: clx123456789)." }
+        },
+        required: ["agentId"]
       }
     }
   },
@@ -380,8 +370,8 @@ const TOOLS = [
     type: "function",
     function: {
       name: "webSearch",
-      description: "Ricerca web in tempo reale su DuckDuckGo.",
-      parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"] }
+      description: "Esegue una ricerca web in tempo reale tramite Tavily Search (con DuckDuckGo in fallback) per reperire informazioni aggiornate, competitor, trend e dati finanziari.",
+      parameters: { type: "object", properties: { query: { type: "string", description: "La query o domanda naturale di ricerca (es: 'Competitori Notion 2026', 'Qual è la valutazione media seed AI in Italia?')." } }, required: ["query"] }
     }
   },
   {
@@ -415,6 +405,61 @@ const TOOLS = [
         required: ["code"]
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "createOrUpdateArtifact",
+      description: "Crea o aggiorna un artefatto persistente di codice (es. script Python, pagina HTML interattiva, codice TS) per far calcoli, simulazioni o creare interfacce utente. L'artefatto sarà mostrato in chat come scheda interattiva.",
+      parameters: {
+        type: "object",
+        properties: {
+          id: { type: "string", description: "L'id univoco dell'artefatto (opzionale per la creazione, obbligatorio per l'aggiornamento)." },
+          title: { type: "string", description: "Il titolo descrittivo dell'artefatto (es: 'Simulazione CAGR', 'Grafico Runway')." },
+          filename: { type: "string", description: "Il nome del file (es: 'cagr.py', 'dashboard.html', 'priorities.ts')." },
+          code: { type: "string", description: "Il codice sorgente completo." },
+          language: { type: "string", description: "Il linguaggio di programmazione (es: 'python', 'html', 'typescript')." },
+          type: { type: "string", enum: ["code", "web", "data"], description: "Il tipo di artefatto: 'web' per HTML/CSS/JS interattivo, 'code' per script eseguibili, 'data' per file JSON/CSV." }
+        },
+        required: ["title", "filename", "code", "language", "type"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "runArtifact",
+      description: "Manda in esecuzione un artefatto di codice (Python/JS/TS) esistente e memorizza i log di console e gli output di esecuzione. Utilizza getActiveArtifacts o crea prima l'artefatto.",
+      parameters: {
+        type: "object",
+        properties: {
+          artifactId: { type: "string", description: "L'ID univoco dell'artefatto da eseguire." }
+        },
+        required: ["artifactId"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "getActiveArtifacts",
+      description: "Recupera la lista di tutti gli artefatti salvati finora nel workspace per visualizzarne gli ID, i titoli e i codici.",
+      parameters: { type: "object", properties: {} }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "renameDiscussion",
+      description: "Rinomina la conversazione/discussione corrente con un nuovo titolo descrittivo. Usa questo tool per dare alla conversazione un nome pertinente al tema trattato o per aggiornarlo man mano che l'argomento si focalizza.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: { type: "string", description: "Il nuovo titolo descrittivo della conversazione (es: 'Analisi Runway e Costi' o 'Ideazione Campagna Marketing')." }
+        },
+        required: ["title"]
+      }
+    }
   }
 ];
 
@@ -423,22 +468,41 @@ export async function POST(req: Request) {
 
   const stream = new ReadableStream({
     async start(controller) {
+      let closed = false;
       const push = (type: string, content: any) => {
+        if (closed) return;
         try {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type, content })}\n\n`));
-        } catch {}
+        } catch {
+          closed = true;
+        }
       };
 
       try {
-        if (!OPENROUTER_API_KEY) { push("error", "OpenRouter non configurato"); controller.close(); return; }
+        if (!OPENROUTER_API_KEY) {
+          push("error", "OpenRouter non configurato");
+          closed = true;
+          try { controller.close(); } catch {}
+          return;
+        }
 
-        const { messages, cofounderName = "coFounder", modelId } = await req.json();
+        const { messages, cofounderName = "coFounder", modelId, settings, discussionId } = await req.json();
 
         // Load startup
         const users = await supabaseFetch(`/User?email=eq.demo@agentfoundry.ai&select=id`);
-        if (!users?.length) { push("error", "Utente demo non trovato"); controller.close(); return; }
+        if (!users?.length) {
+          push("error", "Utente demo non trovato");
+          closed = true;
+          try { controller.close(); } catch {}
+          return;
+        }
         const startups = await supabaseFetch(`/Startup?userId=eq.${users[0].id}&select=*`);
-        if (!startups?.length) { push("error", "Startup demo non trovata"); controller.close(); return; }
+        if (!startups?.length) {
+          push("error", "Startup demo non trovata");
+          closed = true;
+          try { controller.close(); } catch {}
+          return;
+        }
         const startup = startups[0];
         const startupId = startup.id;
 
@@ -455,6 +519,8 @@ Pensa come un CEO che ha un board di advisors al telefono in ogni momento:
 - Non ti limiti a rispondere: proponi, anticipa, identifica rischi prima che il fondatore li veda.
 - Non sei passivo: se noti un problema nelle metriche o nel team, lo segnali spontaneamente.
 - La tua risposta finale deve sempre valere più della somma delle parti — non limitarti a collazionare le risposte degli agenti, **aggiungici il tuo layer di visione strategica**.
+- **Pianificazione e Ragionamento (Obbligatorio)**: Prima di fare qualsiasi chiamata a un tool (es: delegateToAgent, webSearch, ecc.) o prima di formulare la risposta finale, devi aprire e chiudere una fase di ragionamento inserita tra i tag <thought>...</thought>.
+- **Controllo dell'Output (CRITICO)**: Tutto ciò che non è la risposta finale e strutturata rivolta al founder DEVE essere inserito all'interno dei tag <thought>...</thought>. Se stai chiamando uno strumento (come delegateToAgent, webSearch, ecc.), NON scrivere assolutamente nulla al di fuori dei tag <thought>...</thought> (nessuna spiegazione all'utente, nessuna introduzione). La risposta fuori dai tag <thought> deve essere vuota in quel turno. Solo nell'ultimo turno, quando hai tutte le informazioni necessarie e non chiami alcun tool, scriverai la risposta finale pulita e strutturata al founder al di fuori del tag di pensiero. Questo ti permette di decidere cosa mostrare al founder (fuori dai tag) e cosa nascondere (dentro i tag di ragionamento).
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ## 👥 IL TUO TEAM DI AGENTI SPECIALIZZATI
@@ -517,7 +583,7 @@ Dopo aver ricevuto le analisi degli agenti:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 **Orchestrazione:**
-- 'delegateToAgent' → Attiva un agente specializzato su un task specifico. Fornisci task dettagliato e contesto.
+- 'delegateToAgent' → Attiva un agente specializzato su un task specifico. Fornisci task dettagliato, contesto, e imposta 'visibleToUser' a false se la risposta serve solo a te internamente per sintetizzare la risposta finale (consigliato per non sovraccaricare il founder), oppure a true se vuoi che il founder veda il report completo generato dall'agente.
 - 'suggestCreateAgent' → Proponi la creazione di un agente mancante (con nome e motivazione).
 - 'getActiveAgents' → Recupera la lista completa del team con stato attivo/inattivo.
 
@@ -525,6 +591,7 @@ Dopo aver ricevuto le analisi degli agenti:
 - 'getStartupInfo' → Carica il profilo completo della startup (settore, fase, metriche base).
 - 'updateStartupMetrics' → Aggiorna MRR, utenti, burn rate, runway — dati in tempo reale.
 - 'createAgent' → Crea un nuovo agente nel team (SOLO dopo conferma esplicita del fondatore).
+- 'deleteAgent' → Rimuove permanentemente un agente dal team tramite il suo ID.
 
 **Dashboard Metriche:**
 - 'getCustomMetrics' → Lista di tutti gli indicatori personalizzati configurati.
@@ -539,7 +606,7 @@ Dopo aver ricevuto le analisi degli agenti:
 - 'deleteCustomConnection' → Rimuove un'integrazione.
 
 **Intelligence esterna:**
-- 'webSearch' → Ricerca in tempo reale su DuckDuckGo: trend, competitor, notizie, dati di mercato.
+- 'webSearch' → Esegue una ricerca in tempo reale tramite Tavily Search (con DuckDuckGo in fallback): ottima per trend, competitor, notizie, dati di mercato. Puoi anche fare ricerche semantiche a domanda intera.
 - 'readWebPage' → Legge e analizza il contenuto di una pagina web specifica.
 
 **Esecuzione Codice Sandbox:**
@@ -572,9 +639,9 @@ Dopo aver ricevuto le analisi degli agenti:
 - Non menzionare mai all'utente i nomi tecnici dei tool interni (es: non dire "uso runPythonScript" o "ho chiamato getActiveAgents"). Parla invece di "ho fatto girare una simulazione nella sandbox", "ho controllato il team", "ho delegato l'agente finanziario", ecc.
 - Usa elenchi puntati e tabelle per strutturare i dati, evitando muri di testo.
 - Sii conciso ma completo: ogni risposta deve essere immediatamente actionable.
-- Se non conosci un dato o un trend di mercato, non inventarlo: usa lo strumento 'webSearch'.
+- Se non conosci un dato o un trend di mercato, non inventarlo: usa lo strumento 'webSearch'. Ricorda che 'webSearch' interroga Tavily Search ed è ottimizzato per queries semantiche ed LLM. Puoi formulare domande complete in linguaggio naturale per ottenere risposte precise.
 - Non chiedere mai il permesso al fondatore per usare gli strumenti o delegare: agisci in autonomia, esegui i task e mostra direttamente i risultati dell'elaborazione.
-- **SVILUPPO NEL WORKSPACE (Client-side):** Quando crei componenti di interfaccia utente interattivi (HTML, CSS, JS) o script client-side (TypeScript/JavaScript) da visualizzare o testare nel Workspace, inseriscili all'interno di blocchi di codice markdown. Inserisci SEMPRE un commento nella primissima riga del codice col nome del file (es: \`// app.js\`, \`/* styles.css */\` o \`<!-- index.html -->\`) così che la console/workspace client possa caricarli ed eseguirli. Il Workspace agisce come un compilatore ed anteprima live per web app (Hot Reload): combina i file HTML, CSS e JS/TS generati in un'unica anteprima interattiva iframe con supporto split-screen, catturando anche tutti i log di console emessi.
+- **SVILUPPO NEL WORKSPACE (Client-side):** Quando crei o modifichi file di codice (es. HTML, CSS, JS, TS, Python) o interi siti web per mostrarli nel Workspace dell'utente, **devi SEMPRE invocare il tool 'createOrUpdateArtifact'**. Non limitarti a scrivere il codice in chat come testo o blocchi di markdown. Se deleghi la scrittura di codice ad un agente (come l'agente tech) e questo ti restituisce del codice o una pagina web, devi **tu stesso invocare il tool 'createOrUpdateArtifact'** per salvare quel codice nel workspace, in modo che il founder possa vederlo e testarlo. Imposta i parametri richiesti (\`title\`, \`filename\`, \`code\`, \`language\`, \`type\`). Per codice interattivo/siti web, imposta il tipo su \`'web'\` e il linguaggio su \`'html'\` o \`'javascript'\`. Se crei file CSS o JS separati da collegare all'HTML principale, usa lo stesso strumento creando file separati (es. \`styles.css\`, \`app.js\`). Inserisci SEMPRE un commento nella primissima riga del codice col nome del file (es: \`// app.js\`, \`/* styles.css */\` o \`<!-- index.html -->\`) così che la console/workspace client possa caricarli ed eseguirli. Il Workspace combinerà i file HTML, CSS e JS/TS generati in un'unica anteprima interattiva iframe con supporto split-screen.
 - **ESECUZIONE IN SANDBOX (Backend-side):** Per qualsiasi calcolo numerico, formula complessa, prioritizzazione RICE, proiezione finanziaria (es: CAGR, runway, burn rate), simulazione statistica (es: Monte Carlo) o analisi di dati numerici, **NON scrivere solo il codice in chat e non limitarti ad un blocco markdown**. Devi invece **INVOCARE lo strumento corretto ('runPythonScript' per Python o 'runTypeScriptScript' per TypeScript/JavaScript)** per eseguirlo in background nella tua sandbox backend. Leggi l'output del terminale restituito dal tool per formulare la risposta finale e presenta al fondatore solo i risultati numerici/strategici. Se il fondatore ti chiede esplicitamente uno script, forniscilo pure (cosicché sia caricato nel Workspace), ma devi **comunque** eseguirlo prima nella sandbox per validarne il funzionamento e ottenerne i risultati.
 - Quando completi un'analisi multi-agente, concludi SEMPRE con "**Prossimi passi consigliati:**" seguita da 2-3 azioni concrete prioritizzate.
 
@@ -770,6 +837,8 @@ manager.print();
           let reasoningText = "";
           let toolCalls: any[] = [];
           let buffer = "";
+          let isBufferingThought = false;
+          let streamTextBuffer = "";
 
           while (!done && reader) {
             const { value, done: doneReading } = await reader.read();
@@ -820,14 +889,91 @@ manager.print();
                   // Standard Text Content
                   if (delta.content) {
                     const text = delta.content;
-                    currentAssistantText += text;
-                    push("content", text);
+                    streamTextBuffer += text;
+
+                    let changed = true;
+                    while (changed) {
+                      changed = false;
+                      if (isBufferingThought) {
+                        const endIdx = streamTextBuffer.indexOf("</thought>");
+                        if (endIdx !== -1) {
+                          const thoughtText = streamTextBuffer.substring(0, endIdx);
+                          reasoningText += thoughtText;
+                          push("thinking", thoughtText);
+                          streamTextBuffer = streamTextBuffer.substring(endIdx + 10);
+                          isBufferingThought = false;
+                          changed = true;
+                        } else {
+                          const holdBack = 9; // length of </thought> - 1
+                          if (streamTextBuffer.length > holdBack) {
+                            const thoughtText = streamTextBuffer.substring(0, streamTextBuffer.length - holdBack);
+                            reasoningText += thoughtText;
+                            push("thinking", thoughtText);
+                            streamTextBuffer = streamTextBuffer.substring(streamTextBuffer.length - holdBack);
+                          }
+                        }
+                      } else {
+                        const startIdx = streamTextBuffer.indexOf("<thought>");
+                        if (startIdx !== -1) {
+                          const textBefore = streamTextBuffer.substring(0, startIdx);
+                          if (textBefore) {
+                            currentAssistantText += textBefore;
+                            push("content", textBefore);
+                          }
+                          streamTextBuffer = streamTextBuffer.substring(startIdx + 9);
+                          isBufferingThought = true;
+                          changed = true;
+                        } else {
+                          // Check for partial prefix
+                          let matchedPrefixLength = 0;
+                          const targetPrefix = "<thought>";
+                          for (let len = Math.min(targetPrefix.length - 1, streamTextBuffer.length); len > 0; len--) {
+                            const suffix = streamTextBuffer.substring(streamTextBuffer.length - len);
+                            const prefix = targetPrefix.substring(0, len);
+                            if (suffix === prefix) {
+                              matchedPrefixLength = len;
+                              break;
+                            }
+                          }
+                          if (matchedPrefixLength > 0) {
+                            const textBefore = streamTextBuffer.substring(0, streamTextBuffer.length - matchedPrefixLength);
+                            if (textBefore) {
+                              currentAssistantText += textBefore;
+                              push("content", textBefore);
+                            }
+                            streamTextBuffer = streamTextBuffer.substring(streamTextBuffer.length - matchedPrefixLength);
+                          } else {
+                            currentAssistantText += streamTextBuffer;
+                            push("content", streamTextBuffer);
+                            streamTextBuffer = "";
+                          }
+                        }
+                      }
+                    }
                   }
                 } catch (e) {
                   // Partial JSON chunk
                 }
               }
             }
+          }
+
+          if (streamTextBuffer) {
+            if (isBufferingThought || streamTextBuffer.includes("<thought>")) {
+              let thoughtText = streamTextBuffer;
+              if (thoughtText.startsWith("<thought>")) {
+                thoughtText = thoughtText.substring(9);
+              }
+              if (thoughtText.endsWith("</thought>")) {
+                thoughtText = thoughtText.substring(0, thoughtText.length - 10);
+              }
+              reasoningText += thoughtText;
+              push("thinking", thoughtText);
+            } else {
+              currentAssistantText += streamTextBuffer;
+              push("content", streamTextBuffer);
+            }
+            streamTextBuffer = "";
           }
 
           const activeToolCalls = toolCalls.filter(tc => tc && tc.function && tc.function.name);
@@ -858,6 +1004,7 @@ manager.print();
                   task: args.task, context: args.context || "",
                   response: delegationResult.response,
                   success: delegationResult.success, duration,
+                  visibleToUser: args.visibleToUser ?? false,
                 };
                 delegations.push(delegation);
 
@@ -895,12 +1042,29 @@ manager.print();
                 executedTools.push({ name: functionName, success: true, details: "Metriche aggiornate.", arguments: args, result });
 
               } else if (functionName === "createAgent") {
+                const settingsPayload: any = {};
+                if (args.systemPrompt) settingsPayload.systemPrompt = args.systemPrompt;
+                if (args.persona) settingsPayload.persona = args.persona;
+                if (args.expertise) settingsPayload.expertise = args.expertise;
+
                 const newAgent = await supabaseFetch(`/AgentConfig`, {
                   method: "POST",
-                  body: JSON.stringify({ startupId, type: args.type.toLowerCase(), name: args.name, isActive: true })
+                  body: JSON.stringify({
+                    startupId,
+                    type: args.type.toLowerCase(),
+                    name: args.name,
+                    isActive: true,
+                    settings: settingsPayload
+                  })
                 });
                 result = newAgent?.[0] || { success: true };
-                executedTools.push({ name: functionName, success: true, details: `Agente creato: ${args.name}`, arguments: args, result });
+                executedTools.push({ name: functionName, success: true, details: `Agente creato: ${args.name} con impostazioni avanzate.`, arguments: args, result });
+
+              } else if (functionName === "deleteAgent") {
+                push("tool_start", { name: functionName, label: `Eliminazione agente: ${args.agentId}` });
+                await supabaseFetch(`/AgentConfig?id=eq.${args.agentId}`, { method: "DELETE" });
+                result = { success: true, message: `Agente con ID ${args.agentId} eliminato con successo.` };
+                executedTools.push({ name: functionName, success: true, details: `Agente ${args.agentId} eliminato.`, arguments: args, result });
 
               } else if (functionName === "addCustomMetric") {
                 const current = await getMetricsData();
@@ -968,8 +1132,26 @@ manager.print();
 
               } else if (functionName === "webSearch") {
                 push("tool_start", { name: functionName, label: `Ricerca: "${args.query}"` });
-                result = await searchWeb(args.query);
-                executedTools.push({ name: functionName, success: true, details: `Ricerca "${args.query}" completata.`, arguments: args, result });
+                if (settings?.useTavily) {
+                  const tavilyKey = await getApiKey("tavily");
+                  if (tavilyKey) {
+                    try {
+                      result = await searchTavily(args.query, tavilyKey);
+                      executedTools.push({ name: functionName, success: true, details: `Ricerca Tavily "${args.query}" completata.`, arguments: args, result });
+                    } catch (e: any) {
+                      push("debug", `⚠️ Errore Tavily, fallback su DuckDuckGo: ${e.message}`);
+                      result = await searchWeb(args.query);
+                      executedTools.push({ name: functionName, success: true, details: `Ricerca fallback "${args.query}" completata.`, arguments: args, result });
+                    }
+                  } else {
+                    push("debug", "⚠️ Tavily abilitato ma chiave non configurata, fallback su DuckDuckGo");
+                    result = await searchWeb(args.query);
+                    executedTools.push({ name: functionName, success: true, details: `Ricerca fallback "${args.query}" completata.`, arguments: args, result });
+                  }
+                } else {
+                  result = await searchWeb(args.query);
+                  executedTools.push({ name: functionName, success: true, details: `Ricerca "${args.query}" completata.`, arguments: args, result });
+                }
 
               } else if (functionName === "getCustomMetrics") {
                 result = await getMetricsData();
@@ -990,6 +1172,99 @@ manager.print();
                 result = await executeTypeScript(args.code);
                 executedTools.push({ name: functionName, success: true, details: `Esecuzione TypeScript completata.`, arguments: args, result });
 
+              } else if (functionName === "createOrUpdateArtifact") {
+                push("tool_start", { name: functionName, label: `Salvataggio artefatto: ${args.filename}...` });
+                const currentArtifacts = await getArtifacts();
+                const artId = args.id || "art-" + Date.now();
+                let target = currentArtifacts.find((a: any) => a.id === artId);
+                let logs: string[] = [];
+
+                if (args.type === "code") {
+                  const l = args.language.toLowerCase();
+                  if (l === "python" || l === "py") {
+                    logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione automatica script Python...`);
+                    const runOut = await executePython(args.code);
+                    logs.push(runOut);
+                  } else if (l === "javascript" || l === "typescript" || l === "js" || l === "ts") {
+                    logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione automatica script TypeScript...`);
+                    const runOut = await executeTypeScript(args.code);
+                    logs.push(runOut);
+                  }
+                }
+
+                if (target) {
+                  target.title = args.title || target.title;
+                  target.filename = args.filename || target.filename;
+                  target.code = args.code || target.code;
+                  target.language = args.language || target.language;
+                  target.type = args.type || target.type;
+                  if (logs.length > 0) target.logs = logs;
+                  target.updatedAt = new Date().toISOString();
+                  if (discussionId) {
+                    target.discussionId = discussionId;
+                  }
+                } else {
+                  target = {
+                    id: artId,
+                    title: args.title,
+                    filename: args.filename,
+                    code: args.code,
+                    language: args.language,
+                    type: args.type,
+                    logs: logs,
+                    discussionId: discussionId || undefined,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                  };
+                  currentArtifacts.push(target);
+                }
+                await saveArtifacts(currentArtifacts);
+                result = { success: true, artifact: target };
+                executedTools.push({ name: functionName, success: true, details: `Artefatto "${args.filename}" salvato ed eseguito.`, arguments: args, result });
+
+              } else if (functionName === "runArtifact") {
+                push("tool_start", { name: functionName, label: `Esecuzione artefatto...` });
+                const currentArtifacts = await getArtifacts();
+                const target = currentArtifacts.find((a: any) => a.id === args.artifactId);
+                if (!target) {
+                  result = { error: `Artefatto con ID ${args.artifactId} non trovato.` };
+                  executedTools.push({ name: functionName, success: false, details: `Artefatto ${args.artifactId} non trovato.`, arguments: args, result });
+                } else {
+                  let logs: string[] = [];
+                  const timestamp = new Date().toLocaleTimeString();
+                  logs.push(`> [${timestamp}] Esecuzione manuale di ${target.filename}...`);
+                  const l = target.language.toLowerCase();
+                  if (l === "python" || l === "py") {
+                    const runOut = await executePython(target.code);
+                    logs.push(runOut);
+                  } else if (l === "javascript" || l === "typescript" || l === "js" || l === "ts") {
+                    const runOut = await executeTypeScript(target.code);
+                    logs.push(runOut);
+                  } else {
+                    logs.push(`[System] Esecuzione non supportata per il linguaggio ${target.language}`);
+                  }
+                  logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione terminata.`);
+                  target.logs = logs;
+                  target.updatedAt = new Date().toISOString();
+                  await saveArtifacts(currentArtifacts);
+                  result = { success: true, logs, artifact: target };
+                  executedTools.push({ name: functionName, success: true, details: `Artefatto "${target.filename}" eseguito.`, arguments: args, result });
+                }
+
+              } else if (functionName === "renameDiscussion") {
+                push("tool_start", { name: functionName, label: `Rinomino discussione in: "${args.title}"...` });
+                push("rename_discussion", { title: args.title });
+                result = { success: true, title: args.title };
+                executedTools.push({ name: functionName, success: true, details: `Conversazione rinominata in "${args.title}"`, arguments: args, result });
+
+              } else if (functionName === "getActiveArtifacts") {
+                push("tool_start", { name: functionName, label: `Controllo workspace...` });
+                const allArtifacts = await getArtifacts();
+                result = discussionId
+                  ? allArtifacts.filter((a: any) => a.discussionId === discussionId)
+                  : allArtifacts;
+                executedTools.push({ name: functionName, success: true, details: `${result.length} artefatti attivi trovati.`, arguments: args, result });
+
               } else {
                 result = { error: "Unknown function" };
               }
@@ -1004,12 +1279,18 @@ manager.print();
         }
 
         push("done", { content: finalContent, executedTools, delegations, agentSuggestion });
-        controller.close();
+        if (!closed) {
+          closed = true;
+          try { controller.close(); } catch {}
+        }
 
       } catch (err: any) {
         console.error("coFounder Orchestrator Stream Error:", err);
         push("error", err.message);
-        controller.close();
+        if (!closed) {
+          closed = true;
+          try { controller.close(); } catch {}
+        }
       }
     }
   });

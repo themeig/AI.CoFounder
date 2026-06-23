@@ -13,6 +13,9 @@ export interface AppSettings {
 
   // Impostazioni knowledge base
   knowledgeSettings: KnowledgeSettings;
+
+  // Abilita l'utilizzo di Tavily Search per le ricerche web
+  useTavily?: boolean;
 }
 
 export interface MemorySettings {
@@ -65,4 +68,5 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     useOutcomes: true,
     minSuccessRate: 50,
   },
+  useTavily: false,
 };

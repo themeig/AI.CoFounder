@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import ModelSelector from '@/components/ModelSelector';
 import Link from 'next/link';
+import { DEFAULT_APP_SETTINGS } from '@/lib/settings';
 
 interface AgentDelegation {
   agentType: string;
@@ -12,6 +13,7 @@ interface AgentDelegation {
   response: string;
   success: boolean;
   duration: string;
+  visibleToUser?: boolean;
 }
 
 interface AgentSuggestion {
@@ -39,12 +41,34 @@ interface CofounderMessage {
   isStreaming?: boolean;
 }
 
+interface Discussion {
+  id: string;
+  title: string;
+  messages: CofounderMessage[];
+  createdAt: string;
+  updatedAt: string;
+  isGenerating?: boolean;
+  generationStartTime?: number;
+  activeThinkingTime?: string;
+  activeToolLabel?: string | null;
+  activeDelegations?: { agentType: string; agentLabel: string; task: string; status: 'running' | 'done' }[];
+  abortController?: AbortController | null;
+  promptQueue?: string[];
+  draftInput?: string;
+}
+
 interface Artifact {
   id: string;
+  title: string;
   filename: string;
-  language: string;
   code: string;
-  messageIndex: number;
+  language: string;
+  type: 'code' | 'web' | 'data';
+  logs?: string[];
+  messageIndex?: number;
+  discussionId?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 const getFileExtension = (lang: string) => {
@@ -99,9 +123,11 @@ const extractArtifacts = (messages: CofounderMessage[]): Artifact[] => {
 
         list.push({
           id: `msg-${msgIdx}-block-${blockCount}`,
+          title: filename,
           filename,
           language: language.split(' ')[0] || 'text',
           code,
+          type: filename.endsWith('.html') || filename.endsWith('.htm') ? 'web' : 'code',
           messageIndex: msgIdx
         });
       }
@@ -142,9 +168,11 @@ const extractArtifacts = (messages: CofounderMessage[]): Artifact[] => {
 
             list.push({
               id: `msg-${msgIdx}-del-${delIdx}-block-${delBlockCount}`,
+              title: filename,
               filename,
               language: language.split(' ')[0] || 'text',
               code,
+              type: filename.endsWith('.html') || filename.endsWith('.htm') ? 'web' : 'code',
               messageIndex: msgIdx
             });
           }
@@ -358,7 +386,11 @@ function parseInlineMarkdown(text: string) {
   });
 }
 
-function formatMessageContent(content: string, onOpenInWorkspace?: (code: string, language: string) => void) {
+function formatMessageContent(
+  content: string, 
+  onOpenInWorkspace?: (code: string, language: string) => void,
+  hideCodeBlocks?: boolean
+) {
   if (!content) return null;
   let processedContent = content;
   const codeBlockCount = (content.match(/```/g) || []).length;
@@ -368,6 +400,7 @@ function formatMessageContent(content: string, onOpenInWorkspace?: (code: string
 
   return parts.map((part, index) => {
     if (part.startsWith('```') && part.endsWith('```')) {
+      if (hideCodeBlocks) return null;
       const codeLines = part.slice(3, -3).trim().split('\n');
       let language = 'text';
       let code = codeLines.join('\n');
@@ -468,19 +501,184 @@ function formatMessageContent(content: string, onOpenInWorkspace?: (code: string
   });
 }
 
+function InlineArtifactCard({ 
+  artifact, 
+  onOpenInWorkspace 
+}: { 
+  artifact: Artifact; 
+  onOpenInWorkspace: (code: string, language: string) => void;
+}) {
+  const [activeTab, setActiveTab] = useState<'code' | 'logs' | 'preview'>('code');
+  const [terminalLogs, setTerminalLogs] = useState<string[]>(artifact.logs || []);
+  const [running, setRunning] = useState(false);
+
+  const hasLogs = terminalLogs.length > 0;
+  const isWeb = artifact.type === 'web' || artifact.filename.endsWith('.html') || artifact.filename.endsWith('.htm');
+
+  useEffect(() => {
+    if (artifact.logs) {
+      setTerminalLogs(artifact.logs);
+    }
+  }, [artifact.logs]);
+
+  const handleRun = async () => {
+    setRunning(true);
+    setActiveTab('logs');
+    const timestamp = new Date().toLocaleTimeString();
+    setTerminalLogs(prev => [...prev, `> [${timestamp}] Esecuzione manuale...`]);
+    try {
+      const res = await fetch('/api/demo/artifacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'run', id: artifact.id })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.logs) {
+          setTerminalLogs(data.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="my-4 rounded-xl border border-[#DADCE0] overflow-hidden bg-white shadow-xs max-w-full text-xs font-sans text-[#202124]">
+      {/* Header */}
+      <div className="px-4 py-2.5 flex items-center justify-between border-b border-[#E8EAED]" style={{ background: '#F8F9FA' }}>
+        <div className="flex items-center gap-2">
+          <span className="text-base">📦</span>
+          <div>
+            <h4 className="font-bold text-xs" style={{ color: '#202124' }}>{artifact.title}</h4>
+            <p className="text-[10px] text-[#5F6368] font-mono">{artifact.filename}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5">
+          {/* Run Button (for non-web runnable code) */}
+          {(artifact.language === 'python' || artifact.language === 'py' || artifact.language === 'typescript' || artifact.language === 'ts' || artifact.language === 'javascript' || artifact.language === 'js') && (
+            <button
+              type="button"
+              onClick={handleRun}
+              disabled={running}
+              className="text-[10px] font-semibold text-white bg-[#34A853] hover:bg-[#2C8C47] px-2 py-0.5 rounded transition disabled:opacity-50"
+            >
+              {running ? 'Esecuzione...' : '▶ Esegui'}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => onOpenInWorkspace(artifact.code, artifact.language)}
+            className="text-[10px] font-semibold text-[#1A73E8] hover:text-[#1557B0] border border-[#DADCE0] bg-white px-2 py-0.5 rounded transition"
+          >
+            🖥️ Workspace
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex border-b border-[#E8EAED] px-4" style={{ background: '#F8F9FA' }}>
+        <button
+          type="button"
+          onClick={() => setActiveTab('code')}
+          className={`py-2 px-3 border-b-2 font-medium text-[10px] uppercase tracking-wider transition ${
+            activeTab === 'code' ? 'border-[#1A73E8] text-[#1A73E8]' : 'border-transparent text-[#5F6368] hover:text-[#202124]'
+          }`}
+        >
+          Codice
+        </button>
+        {hasLogs && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('logs')}
+            className={`py-2 px-3 border-b-2 font-medium text-[10px] uppercase tracking-wider transition ${
+              activeTab === 'logs' ? 'border-[#1A73E8] text-[#1A73E8]' : 'border-transparent text-[#5F6368] hover:text-[#202124]'
+            }`}
+          >
+            Console Output
+          </button>
+        )}
+        {isWeb && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('preview')}
+            className={`py-2 px-3 border-b-2 font-medium text-[10px] uppercase tracking-wider transition ${
+              activeTab === 'preview' ? 'border-[#1A73E8] text-[#1A73E8]' : 'border-transparent text-[#5F6368] hover:text-[#202124]'
+            }`}
+          >
+            Anteprima
+          </button>
+        )}
+      </div>
+
+      {/* Tab Contents */}
+      <div className="p-3 bg-[#FAFAFA]">
+        {activeTab === 'code' && (
+          <pre className="overflow-x-auto font-mono text-[11px] leading-relaxed p-2.5 rounded border border-[#E8EAED] bg-[#FFFFFF] max-h-64 text-[#202124]">
+            <code>{artifact.code}</code>
+          </pre>
+        )}
+        {activeTab === 'logs' && (
+          <div className="bg-black text-[#00E676] font-mono text-[11px] p-3 rounded overflow-y-auto max-h-64 selection:bg-[#00E676] selection:text-black">
+            {terminalLogs.map((log, idx) => (
+              <div key={idx} className="whitespace-pre-wrap">{log}</div>
+            ))}
+          </div>
+        )}
+        {activeTab === 'preview' && (
+          <div className="bg-white rounded border border-[#E8EAED] overflow-hidden" style={{ height: '220px' }}>
+            <iframe
+              srcDoc={artifact.code}
+              sandbox="allow-scripts allow-same-origin allow-modals"
+              className="w-full h-full border-0 bg-white"
+              title="Inline Web App Preview"
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 export default function CoFounderPage() {
   const [cofounderName, setCofounderName] = useState('coFounder');
   const [cofounderInput, setCofounderInput] = useState('');
-  const [cofounderMessages, setCofounderMessages] = useState<CofounderMessage[]>([]);
-  const [cofounderLoading, setCofounderLoading] = useState(false);
+  const [discussions, setDiscussions] = useState<Discussion[]>([]);
+  const [activeDiscussionId, setActiveDiscussionId] = useState<string | null>(null);
+  const [editingDiscussionId, setEditingDiscussionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
   const [selectedModel, setSelectedModel] = useState('openrouter/owl-alpha');
-  const [activeThinkingTime, setActiveThinkingTime] = useState('0.0');
-  const [activeDelegations, setActiveDelegations] = useState<{ agentType: string; agentLabel: string; task: string; status: 'running' | 'done' }[]>([]);
-  const [promptQueue, setPromptQueue] = useState<string[]>([]);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashFilter, setSlashFilter] = useState('');
   const [startupInfo, setStartupInfo] = useState<any>(null);
-  const [activeToolLabel, setActiveToolLabel] = useState<string | null>(null);
+
+  // Track active discussion ID in a ref to keep stream completion callbacks aligned
+  const activeDiscussionIdRef = useRef(activeDiscussionId);
+  useEffect(() => {
+    activeDiscussionIdRef.current = activeDiscussionId;
+  }, [activeDiscussionId]);
+
+  // Derived Active Discussion States
+  const activeDiscussion = discussions.find(d => d.id === activeDiscussionId);
+  const cofounderMessages = activeDiscussion ? activeDiscussion.messages : [];
+  const cofounderLoading = activeDiscussion ? !!activeDiscussion.isGenerating : false;
+  const activeThinkingTime = activeDiscussion ? activeDiscussion.activeThinkingTime || '0.0' : '0.0';
+  const activeToolLabel = activeDiscussion ? activeDiscussion.activeToolLabel || null : null;
+  const activeDelegations = activeDiscussion ? activeDiscussion.activeDelegations || [] : [];
+  const [settings, setSettings] = useState<any>(DEFAULT_APP_SETTINGS);
+
+  // Load app settings
+  useEffect(() => {
+    const stored = localStorage.getItem('agentfoundry_settings');
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setSettings({ ...DEFAULT_APP_SETTINGS, ...parsed });
+        if (parsed.defaultModel) setSelectedModel(parsed.defaultModel);
+      } catch {}
+    }
+  }, []);
 
   // Artifact Workspace States
   const [showWorkspace, setShowWorkspace] = useState(false);
@@ -488,20 +686,98 @@ export default function CoFounderPage() {
   const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [activeArtifact, setActiveArtifact] = useState<Artifact | null>(null);
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
-  const [consoleOpen, setConsoleOpen] = useState(true);
+  const [consoleOpen, setConsoleOpen] = useState(false);
   const [editedCodes, setEditedCodes] = useState<Record<string, string>>({});
-  const [workspaceMode, setWorkspaceMode] = useState<'editor' | 'preview' | 'split'>('split');
+  const [workspaceMode, setWorkspaceMode] = useState<'editor' | 'preview' | 'split'>('preview');
   const [iframeKey, setIframeKey] = useState(0);
   const [previewUrl, setPreviewUrl] = useState('');
+  const [isWorkspaceFullScreen, setIsWorkspaceFullScreen] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
+  const workspaceRef = useRef<HTMLDivElement>(null);
   const isResizingRef = useRef(false);
   const gutterRef = useRef<HTMLDivElement>(null);
   const prevArtifactCountRef = useRef(0);
+
+  const discussionWorkspaceStatesRef = useRef<Record<string, {
+    showWorkspace: boolean;
+    workspaceMode: 'editor' | 'preview' | 'split';
+    activeArtifactId: string | null;
+    isWorkspaceFullScreen: boolean;
+  }>>({});
+
+  const prevDiscussionIdRef = useRef<string | null>(null);
+  const shouldAutoOpenWorkspaceRef = useRef(false);
+
+  // Sync workspace states on discussion switch
+  useEffect(() => {
+    const newId = activeDiscussionId;
+    if (newId && prevDiscussionIdRef.current !== newId) {
+      const saved = discussionWorkspaceStatesRef.current[newId];
+      if (saved) {
+        setShowWorkspace(saved.showWorkspace);
+        setWorkspaceMode(saved.workspaceMode);
+        setIsWorkspaceFullScreen(saved.isWorkspaceFullScreen);
+      } else {
+        setShowWorkspace(false);
+        setWorkspaceMode('preview');
+        setIsWorkspaceFullScreen(false);
+        setActiveArtifact(null);
+      }
+      prevDiscussionIdRef.current = newId;
+    }
+  }, [activeDiscussionId]);
+
+  // Save workspace states when they change
+  useEffect(() => {
+    if (activeDiscussionId) {
+      discussionWorkspaceStatesRef.current[activeDiscussionId] = {
+        showWorkspace,
+        workspaceMode,
+        activeArtifactId: activeArtifact ? activeArtifact.id : null,
+        isWorkspaceFullScreen,
+      };
+    }
+  }, [activeDiscussionId, showWorkspace, workspaceMode, activeArtifact, isWorkspaceFullScreen]);
+
+  const fetchArtifacts = async (discId?: string) => {
+    const targetId = discId || activeDiscussionIdRef.current;
+    if (!targetId) return;
+    try {
+      const res = await fetch(`/api/demo/artifacts?discussionId=${targetId}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (targetId === activeDiscussionIdRef.current) {
+          setArtifacts(data);
+        }
+      }
+    } catch (err) {
+      console.error("Errore fetch artifacts:", err);
+    }
+  };
+
+  const handleArtifactChange = async (newCode: string) => {
+    if (!activeArtifact) return;
+    const updated = { ...activeArtifact, code: newCode };
+    setActiveArtifact(updated);
+    setArtifacts(prev => prev.map(a => a.id === activeArtifact.id ? updated : a));
+    
+    try {
+      await fetch('/api/demo/artifacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...updated, discussionId: activeDiscussionId })
+      });
+    } catch (err) {
+      console.error("Errore salvataggio modifica:", err);
+    }
+  };
 
   // Drag Resizing Listeners
   const handleResizeMouseDown = (e: React.MouseEvent) => {
     e.preventDefault();
     isResizingRef.current = true;
+    setIsDragging(true);
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
   };
@@ -510,18 +786,26 @@ export default function CoFounderPage() {
     const handleMouseMove = (e: MouseEvent) => {
       if (!isResizingRef.current) return;
       const newWidth = window.innerWidth - e.clientX;
-      if (newWidth < 200) {
-        setShowWorkspace(false);
-      } else if (newWidth < window.innerWidth - 300) {
-        setWorkspaceWidth(newWidth);
+      if (newWidth >= 200 && newWidth < window.innerWidth - 300) {
+        if (workspaceRef.current) {
+          workspaceRef.current.style.width = `${newWidth}px`;
+        }
       }
     };
 
-    const handleMouseUp = () => {
+    const handleMouseUp = (e: MouseEvent) => {
       if (isResizingRef.current) {
         isResizingRef.current = false;
+        setIsDragging(false);
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
+        
+        const newWidth = window.innerWidth - e.clientX;
+        if (newWidth < 200) {
+          setShowWorkspace(false);
+        } else if (newWidth < window.innerWidth - 300) {
+          setWorkspaceWidth(newWidth);
+        }
       }
     };
 
@@ -562,50 +846,35 @@ export default function CoFounderPage() {
     }
   };
 
-  // Extract artifacts and update workspace contents
+  // Synchronize active artifact when artifacts list changes
   useEffect(() => {
-    const extracted = extractArtifacts(cofounderMessages);
-    
-    // Merge manual user edits
-    const merged = extracted.map(art => {
-      if (editedCodes[art.id] !== undefined) {
-        return { ...art, code: editedCodes[art.id] };
-      }
-      return art;
-    });
+    if (artifacts.length > 0) {
+      const savedState = activeDiscussionId ? discussionWorkspaceStatesRef.current[activeDiscussionId] : null;
+      const savedId = savedState?.activeArtifactId;
 
-    setArtifacts(merged);
-
-    if (merged.length > 0) {
       setActiveArtifact(prev => {
-        if (!prev) return merged[merged.length - 1];
-        const exists = merged.find(a => a.id === prev.id);
-        if (!exists) return merged[merged.length - 1];
-        // Keep active code synced with stream if not edited
-        if (exists.code !== prev.code && editedCodes[prev.id] === undefined) {
-          return exists;
+        if (savedId) {
+          const savedArt = artifacts.find(a => a.id === savedId);
+          if (savedArt) return savedArt;
         }
-        return prev;
+        if (!prev) return artifacts[artifacts.length - 1];
+        const exists = artifacts.find(a => a.id === prev.id);
+        return exists || artifacts[artifacts.length - 1];
       });
 
-      if (merged.length > prevArtifactCountRef.current) {
+      const isGenerating = activeDiscussion ? !!activeDiscussion.isGenerating : false;
+      if (artifacts.length > prevArtifactCountRef.current && (prevArtifactCountRef.current > 0 || isGenerating || shouldAutoOpenWorkspaceRef.current)) {
         setShowWorkspace(true);
-        const lastArt = merged[merged.length - 1];
+        const lastArt = artifacts[artifacts.length - 1];
         setActiveArtifact(lastArt);
-        // Rileva se è una web app per impostare la modalità di visualizzazione di default
-        const isWeb = lastArt.filename.endsWith('.html') || 
-                      lastArt.filename.endsWith('.css') || 
-                      lastArt.filename.endsWith('.js') || 
-                      lastArt.filename.endsWith('.ts') ||
-                      lastArt.filename.endsWith('.jsx') ||
-                      lastArt.filename.endsWith('.tsx');
-        setWorkspaceMode(isWeb ? 'split' : 'editor');
+        setWorkspaceMode('preview');
+        shouldAutoOpenWorkspaceRef.current = false;
       }
     } else {
       setActiveArtifact(null);
     }
-    prevArtifactCountRef.current = merged.length;
-  }, [cofounderMessages, editedCodes]);
+    prevArtifactCountRef.current = artifacts.length;
+  }, [artifacts, activeDiscussionId, activeDiscussion]);
 
   // Ascolta i log ed errori inviati dall'iframe dell'anteprima web
   useEffect(() => {
@@ -649,11 +918,14 @@ export default function CoFounderPage() {
     if (found) {
       setActiveArtifact(found);
     } else {
+      const filename = `codice.${getFileExtension(language)}`;
       const temp: Artifact = {
         id: `temp-${Date.now()}`,
-        filename: `codice.${getFileExtension(language)}`,
+        title: filename,
+        filename,
         language,
         code,
+        type: filename.endsWith('.html') || filename.endsWith('.htm') ? 'web' : 'code',
         messageIndex: -1
       };
       setActiveArtifact(temp);
@@ -662,15 +934,205 @@ export default function CoFounderPage() {
   };
 
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const thinkingTimerRef = useRef<any>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-  const promptQueueRef = useRef<string[]>([]);
+  const cofounderTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const chatContainerRef = useRef<HTMLDivElement>(null);
+  const isAtBottomRef = useRef(true);
+
+  const handleScroll = () => {
+    const c = chatContainerRef.current;
+    if (!c) return;
+    isAtBottomRef.current = c.scrollHeight - c.scrollTop - c.clientHeight <= 150;
+  };
 
   useEffect(() => {
-    promptQueueRef.current = promptQueue;
-  }, [promptQueue]);
+    if (cofounderTextareaRef.current) {
+      cofounderTextareaRef.current.style.height = 'auto';
+      cofounderTextareaRef.current.style.height = `${cofounderTextareaRef.current.scrollHeight}px`;
+    }
+  }, [cofounderInput]);
+  // No longer using global page-wide prompt queue
 
-  // Load startup info
+  // Thinking timer ticker for all active generating discussions in parallel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDiscussions(prev => {
+        const hasGenerating = prev.some(d => d.isGenerating);
+        if (!hasGenerating) return prev;
+        
+        return prev.map(d => {
+          if (d.isGenerating && d.generationStartTime) {
+            return {
+              ...d,
+              activeThinkingTime: ((Date.now() - d.generationStartTime) / 1000).toFixed(1)
+            };
+          }
+          return d;
+        });
+      });
+    }, 500);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // Fetch discussions
+  const fetchDiscussions = async (activeIdToSelect?: string) => {
+    try {
+      const res = await fetch('/api/demo/cofounder/discussions');
+      if (res.ok) {
+        const list: Discussion[] = await res.json();
+        setDiscussions(list);
+        
+        if (list.length > 0) {
+          let selectedId = activeIdToSelect;
+          if (!selectedId) {
+            selectedId = localStorage.getItem('agentfoundry_active_discussion_id') || undefined;
+          }
+          if (!selectedId || !list.some(d => d.id === selectedId)) {
+            selectedId = list[0].id;
+          }
+          
+          setActiveDiscussionId(selectedId);
+          localStorage.setItem('agentfoundry_active_discussion_id', selectedId);
+        } else {
+          handleCreateNewDiscussion();
+        }
+      } else {
+        handleCreateNewDiscussion();
+      }
+    } catch (err) {
+      console.error('Error fetching discussions:', err);
+      handleCreateNewDiscussion();
+    }
+  };
+
+  const handleSwitchDiscussion = (id: string) => {
+    // Save current input to previous active discussion draft
+    setDiscussions(prev => prev.map(d => {
+      if (d.id === activeDiscussionId) {
+        return { ...d, draftInput: cofounderInput };
+      }
+      return d;
+    }));
+
+    // Switch
+    setActiveDiscussionId(id);
+    localStorage.setItem('agentfoundry_active_discussion_id', id);
+
+    // Clear workspace state for the new active discussion while loading
+    setArtifacts([]);
+
+    // Fetch artifacts for the new active discussion
+    fetchArtifacts(id);
+
+    // Load new input draft
+    const target = discussions.find(d => d.id === id);
+    setCofounderInput(target?.draftInput || '');
+  };
+
+  const handleCreateNewDiscussion = async () => {
+    // Save current input to previous active discussion draft
+    setDiscussions(prev => prev.map(d => {
+      if (d.id === activeDiscussionId) {
+        return { ...d, draftInput: cofounderInput };
+      }
+      return d;
+    }));
+
+    const newId = 'disc_' + Math.random().toString(36).substring(2, 15);
+    const welcomeMsg: CofounderMessage = {
+      role: 'assistant',
+      content: `Ciao! Sono il tuo coFounder, l'assistente co-fondatore del tuo progetto. Posso aiutarti a gestire il team, creare agenti o aggiornare le metriche della startup in tempo reale. Cosa facciamo oggi?`,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+    
+    const newDiscussion: Discussion = {
+      id: newId,
+      title: 'Nuova Conversazione',
+      messages: [welcomeMsg],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+    
+    setDiscussions(prev => [newDiscussion, ...prev]);
+    setActiveDiscussionId(newId);
+    localStorage.setItem('agentfoundry_active_discussion_id', newId);
+
+    // Clear workspace for the new empty discussion
+    setArtifacts([]);
+
+    // Clear input
+    setCofounderInput('');
+    
+    try {
+      await fetch('/api/demo/cofounder/discussions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDiscussion)
+      });
+    } catch (err) {
+      console.error('Error creating new discussion:', err);
+    }
+  };
+
+  const handleDeleteDiscussion = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const updatedDiscussions = discussions.filter(d => d.id !== id);
+    setDiscussions(updatedDiscussions);
+    
+    try {
+      await fetch(`/api/demo/cofounder/discussions?id=${id}`, {
+        method: 'DELETE'
+      });
+    } catch (err) {
+      console.error('Error deleting discussion:', err);
+    }
+    
+    if (activeDiscussionId === id) {
+      if (updatedDiscussions.length > 0) {
+        const nextId = updatedDiscussions[0].id;
+        setActiveDiscussionId(nextId);
+        localStorage.setItem('agentfoundry_active_discussion_id', nextId);
+      } else {
+        handleCreateNewDiscussion();
+      }
+    }
+  };
+
+  const handleRenameDiscussionSubmit = async (id: string, newTitle: string) => {
+    if (!newTitle.trim()) {
+      setEditingDiscussionId(null);
+      return;
+    }
+    
+    setDiscussions(prev => prev.map(d => {
+      if (d.id === id) {
+        return { ...d, title: newTitle };
+      }
+      return d;
+    }));
+    setEditingDiscussionId(null);
+
+    const target = discussions.find(d => d.id === id);
+    const msgs = target ? target.messages : [];
+
+    try {
+      await fetch('/api/demo/cofounder/discussions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          title: newTitle,
+          messages: msgs
+        })
+      });
+    } catch (err) {
+      console.error('Error renaming discussion:', err);
+    }
+  };
+
+  // Load startup info and discussions
   useEffect(() => {
     fetch('/api/demo/startup')
       .then(res => res.json())
@@ -680,94 +1142,110 @@ export default function CoFounderPage() {
         }
       })
       .catch(console.error);
+
+    fetchDiscussions();
   }, []);
 
-  // Load chat messages
+  // Scroll to bottom only if user was already at the bottom
   useEffect(() => {
-    const storedChat = sessionStorage.getItem('agentfoundry_cofounder_chat');
-    if (storedChat) {
-      try {
-        setCofounderMessages(JSON.parse(storedChat));
-      } catch {}
-    } else {
-      setCofounderMessages([
-        {
-          role: 'assistant',
-          content: `Ciao! Sono il tuo ${cofounderName}, l'assistente co-fondatore del tuo progetto. Posso aiutarti a gestire il team, creare agenti o aggiornare le metriche della startup in tempo reale. Cosa facciamo oggi?`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        }
-      ]);
+    if (isAtBottomRef.current) {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [cofounderName]);
-
-  // Scroll to bottom
-  useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [cofounderMessages, cofounderLoading, activeDelegations]);
 
-  const saveChat = (msgs: CofounderMessage[]) => {
-    sessionStorage.setItem('agentfoundry_cofounder_chat', JSON.stringify(msgs));
+  const saveChatForId = async (id: string, msgs: CofounderMessage[], updatedTitle?: string) => {
+    try {
+      await fetch('/api/demo/cofounder/discussions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id,
+          messages: msgs,
+          title: updatedTitle
+        })
+      });
+    } catch (err) {
+      console.error('Error saving discussion:', err);
+    }
   };
 
-  // Queue drain logic
-  const prevLoadingRef = useRef(false);
-  useEffect(() => {
-    if (prevLoadingRef.current && !cofounderLoading) {
-      const q = promptQueueRef.current;
-      if (q.length > 0) {
-        const [next, ...rest] = q;
-        setPromptQueue(rest);
-        setTimeout(() => handleSendMessage(undefined, next), 500);
+  const saveChat = async (msgs: CofounderMessage[], updatedTitle?: string) => {
+    if (!activeDiscussionId) return;
+    
+    setDiscussions(prev => prev.map(d => {
+      if (d.id === activeDiscussionId) {
+        return {
+          ...d,
+          messages: msgs,
+          title: updatedTitle || d.title,
+          updatedAt: new Date().toISOString()
+        };
       }
-    }
-    prevLoadingRef.current = cofounderLoading;
-  }, [cofounderLoading]);
+      return d;
+    }));
 
-  // Timer logic for LLM thought
-  const startThinkingTimer = () => {
-    setActiveThinkingTime('0.0');
-    const start = Date.now();
-    thinkingTimerRef.current = setInterval(() => {
-      setActiveThinkingTime(((Date.now() - start) / 1000).toFixed(1));
-    }, 1000);
+    await saveChatForId(activeDiscussionId, msgs, updatedTitle);
   };
 
-  const stopThinkingTimer = () => {
-    if (thinkingTimerRef.current) {
-      clearInterval(thinkingTimerRef.current);
-    }
-  };
+  // Queuing is handled inside each discussion independently
 
-  const handleStopGeneration = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
+  const handleStopGeneration = (id: string) => {
+    const target = discussions.find(d => d.id === id);
+    if (target?.abortController) {
+      target.abortController.abort();
     }
-    stopThinkingTimer();
-    setCofounderLoading(false);
-    setActiveDelegations([]);
-    setActiveToolLabel(null);
 
     const interMsg: CofounderMessage = {
       role: 'assistant',
       content: '⏹ Generazione interrotta.',
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
-    const updated = [...cofounderMessages, interMsg];
-    setCofounderMessages(updated);
-    saveChat(updated);
+    
+    const updatedMessages = [...(target?.messages || []), interMsg];
+
+    setDiscussions(prev => prev.map(d => {
+      if (d.id === id) {
+        return {
+          ...d,
+          isGenerating: false,
+          activeToolLabel: null,
+          activeDelegations: [],
+          abortController: null,
+          messages: updatedMessages
+        };
+      }
+      return d;
+    }));
+
+    saveChatForId(id, updatedMessages);
   };
 
-  const handleSendMessage = async (e?: React.FormEvent, customText?: string, displayText?: string) => {
+  const handleSendMessage = async (e?: React.FormEvent, customText?: string, displayText?: string, targetId?: string) => {
     e?.preventDefault();
+    const currentActiveId = targetId || activeDiscussionId;
+    if (!currentActiveId) return;
+
     const promptToSend = (customText || cofounderInput).trim();
     if (!promptToSend) return;
 
-    if (!customText) {
+    shouldAutoOpenWorkspaceRef.current = true;
+
+    if (!customText && !targetId) {
       setCofounderInput('');
     }
 
-    if (cofounderLoading) {
-      setPromptQueue(prev => [...prev, promptToSend]);
+    const activeDisc = discussions.find(d => d.id === currentActiveId);
+    if (!activeDisc) return;
+    if (activeDisc.isGenerating) {
+      setDiscussions(prev => prev.map(d => {
+        if (d.id === currentActiveId) {
+          return {
+            ...d,
+            promptQueue: [...(d.promptQueue || []), promptToSend]
+          };
+        }
+        return d;
+      }));
       return;
     }
 
@@ -778,15 +1256,35 @@ export default function CoFounderPage() {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
 
-    const updatedWithUser = [...cofounderMessages, userMsg];
-    setCofounderMessages(updatedWithUser);
-    saveChat(updatedWithUser);
-    setCofounderLoading(true);
-    setActiveDelegations([]);
-    startThinkingTimer();
+    const updatedWithUser = [...activeDisc.messages, userMsg];
+
+    // Auto-generate title if this is the first user prompt or title is still default
+    let updatedTitle = undefined;
+    if (activeDisc.title === 'Nuova Conversazione' || !activeDisc.title) {
+      updatedTitle = promptToSend.length > 30 ? promptToSend.slice(0, 30) + '...' : promptToSend;
+    }
 
     const controller = new AbortController();
-    abortControllerRef.current = controller;
+
+    setDiscussions(prev => prev.map(d => {
+      if (d.id === currentActiveId) {
+        return {
+          ...d,
+          messages: updatedWithUser,
+          title: updatedTitle || d.title,
+          isGenerating: true,
+          generationStartTime: Date.now(),
+          activeThinkingTime: '0.0',
+          activeToolLabel: null,
+          activeDelegations: [],
+          abortController: controller
+        };
+      }
+      return d;
+    }));
+
+    saveChatForId(currentActiveId, updatedWithUser, updatedTitle);
+
     const startTime = Date.now();
 
     try {
@@ -797,6 +1295,8 @@ export default function CoFounderPage() {
           messages: updatedWithUser.map(m => ({ role: m.role, content: m.content })),
           cofounderName,
           modelId: selectedModel,
+          settings,
+          discussionId: currentActiveId,
         }),
         signal: controller.signal
       });
@@ -816,6 +1316,7 @@ export default function CoFounderPage() {
       let replyDelegations: any[] = [];
       let replySuggestion: any = null;
       let thinkingTimeVal: string | undefined = undefined;
+      let streamRenamedTitle: string | null = null;
 
       // Temporary placeholder message while streaming
       const assistantPlaceholder: CofounderMessage = {
@@ -825,7 +1326,16 @@ export default function CoFounderPage() {
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         isStreaming: true,
       };
-      setCofounderMessages(prev => [...prev, assistantPlaceholder]);
+      
+      setDiscussions(prev => prev.map(d => {
+        if (d.id === currentActiveId) {
+          return {
+            ...d,
+            messages: [...d.messages, assistantPlaceholder]
+          };
+        }
+        return d;
+      }));
 
       while (true) {
         const { value, done } = await reader.read();
@@ -848,17 +1358,26 @@ export default function CoFounderPage() {
               replyContent += payload;
             } else if (parsed.type === 'thinking') {
               replyThinking += payload;
+            } else if (parsed.type === 'rename_discussion') {
+              const newTitle = payload.title;
+              streamRenamedTitle = newTitle;
+              setDiscussions(prev => prev.map(d => {
+                if (d.id === currentActiveId) {
+                  return { ...d, title: newTitle };
+                }
+                return d;
+              }));
             } else if (parsed.type === 'tool_start') {
-              setActiveToolLabel(payload.label);
+              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: payload.label } : d));
             } else if (parsed.type === 'tool_run') {
-              setActiveToolLabel(null);
+              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: null } : d));
             } else if (parsed.type === 'delegating') {
               const del = payload;
-              setActiveDelegations(prev => [...prev, { agentType: del.agentType, agentLabel: del.agentLabel, task: del.task, status: 'running' }]);
+              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeDelegations: [...(d.activeDelegations || []), { agentType: del.agentType, agentLabel: del.agentLabel, task: del.task, status: 'running' }] } : d));
             } else if (parsed.type === 'delegation_done') {
               const del = payload;
               replyDelegations.push(del);
-              setActiveDelegations(prev => prev.map(d => d.agentType === del.agentType ? { ...d, status: 'done' } : d));
+              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeDelegations: (d.activeDelegations || []).map((ad: any) => ad.agentType === del.agentType ? { ...ad, status: 'done' } : ad) } : d));
             } else if (parsed.type === 'agent_suggestion') {
               replySuggestion = payload;
             } else if (parsed.type === 'done') {
@@ -867,19 +1386,19 @@ export default function CoFounderPage() {
               replyDelegations = payload.delegations || [];
               replySuggestion = payload.agentSuggestion;
               thinkingTimeVal = ((Date.now() - startTime) / 1000).toFixed(1);
-              setActiveToolLabel(null);
+              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: null } : d));
             } else if (parsed.type === 'error') {
-              setActiveToolLabel(null);
+              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: null } : d));
               throw new Error(payload);
             }
 
             // Update placeholder in real time
-            setCofounderMessages(prev => {
-              const last = prev[prev.length - 1];
-              if (last && last.role === 'assistant') {
-                return [
-                  ...prev.slice(0, -1),
-                  {
+            setDiscussions(prev => prev.map(d => {
+              if (d.id === currentActiveId) {
+                const messages = [...d.messages];
+                const last = messages[messages.length - 1];
+                if (last && last.role === 'assistant') {
+                  messages[messages.length - 1] = {
                     ...last,
                     content: replyContent,
                     thinking: replyThinking,
@@ -888,53 +1407,111 @@ export default function CoFounderPage() {
                     agentSuggestion: replySuggestion,
                     thinkingTime: thinkingTimeVal,
                     isStreaming: true,
-                  }
-                ];
+                  };
+                }
+                return { ...d, messages };
               }
-              return prev;
-            });
+              return d;
+            }));
           } catch (e) {
             console.error('Failed to parse SSE data line:', jsonStr, e);
           }
         }
       }
 
-      // Finish streaming
-      stopThinkingTimer();
-      setCofounderLoading(false);
-      setActiveDelegations([]);
-
       // Fetch agents list update in background to sync potential new agents
       window.dispatchEvent(new Event('startup-agents-updated'));
 
+      // Fetch any new artifacts generated
+      if (currentActiveId === activeDiscussionIdRef.current) {
+        fetchArtifacts(currentActiveId);
+      }
+
       // Final save and update message status (disable streaming flag)
-      setCofounderMessages(prev => {
-        const last = prev[prev.length - 1];
+      setDiscussions(prev => {
+        const dIndex = prev.findIndex(d => d.id === currentActiveId);
+        if (dIndex === -1) return prev;
+
+        const d = prev[dIndex];
+        const messages = [...d.messages];
+        const last = messages[messages.length - 1];
+        let finalMessages = messages;
         if (last && last.role === 'assistant') {
           const finalMsg = { ...last, isStreaming: false };
-          const newMessages = [...prev.slice(0, -1), finalMsg];
-          saveChat(newMessages);
-          return newMessages;
+          finalMessages = [...messages.slice(0, -1), finalMsg];
         }
-        saveChat(prev);
-        return prev;
+
+        saveChatForId(currentActiveId, finalMessages, streamRenamedTitle || undefined);
+
+        const queue = d.promptQueue || [];
+        const hasQueued = queue.length > 0;
+        const nextPrompt = queue[0];
+        const updatedQueue = queue.slice(1);
+
+        const updatedDiscussion = {
+          ...d,
+          isGenerating: hasQueued,
+          generationStartTime: hasQueued ? Date.now() : undefined,
+          activeThinkingTime: hasQueued ? '0.0' : '0.0',
+          activeToolLabel: null,
+          activeDelegations: [],
+          abortController: hasQueued ? d.abortController : null,
+          messages: finalMessages,
+          promptQueue: updatedQueue
+        };
+
+        if (hasQueued && nextPrompt) {
+          setTimeout(() => {
+            handleSendMessage(undefined, nextPrompt, undefined, currentActiveId);
+          }, 500);
+        }
+
+        return prev.map(item => item.id === currentActiveId ? updatedDiscussion : item);
       });
 
     } catch (err: any) {
       if (err.name === 'AbortError') return;
       console.error('SSE connection error:', err);
-      stopThinkingTimer();
-      setCofounderLoading(false);
-      setActiveDelegations([]);
 
       const errorMsg: CofounderMessage = {
         role: 'assistant',
         content: `❌ Si è verificato un errore durante la generazione: ${err.message}`,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
-      const finalErr = [...cofounderMessages, errorMsg];
-      setCofounderMessages(finalErr);
-      saveChat(finalErr);
+
+      setDiscussions(prev => {
+        const dIndex = prev.findIndex(d => d.id === currentActiveId);
+        if (dIndex === -1) return prev;
+
+        const d = prev[dIndex];
+        const finalErr = [...d.messages, errorMsg];
+        saveChatForId(currentActiveId, finalErr);
+
+        const queue = d.promptQueue || [];
+        const hasQueued = queue.length > 0;
+        const nextPrompt = queue[0];
+        const updatedQueue = queue.slice(1);
+
+        const updatedDiscussion = {
+          ...d,
+          isGenerating: hasQueued,
+          generationStartTime: hasQueued ? Date.now() : undefined,
+          activeThinkingTime: hasQueued ? '0.0' : '0.0',
+          activeToolLabel: null,
+          activeDelegations: [],
+          abortController: null,
+          messages: finalErr,
+          promptQueue: updatedQueue
+        };
+
+        if (hasQueued && nextPrompt) {
+          setTimeout(() => {
+            handleSendMessage(undefined, nextPrompt, undefined, currentActiveId);
+          }, 500);
+        }
+
+        return prev.map(item => item.id === currentActiveId ? updatedDiscussion : item);
+      });
     }
   };
 
@@ -966,18 +1543,22 @@ export default function CoFounderPage() {
     if (cmd === '/clear') {
       setCofounderInput('');
       setShowSlashMenu(false);
-      sessionStorage.removeItem('agentfoundry_cofounder_chat');
-      setCofounderMessages([
-        {
-          role: 'assistant',
-          content: `Chat svuotata. Sono pronto per una nuova sessione! Come posso aiutarti oggi?`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      const welcomeMsg: CofounderMessage = {
+        role: 'assistant',
+        content: `Chat svuotata. Sono pronto per una nuova sessione! Come posso aiutarti oggi?`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setDiscussions(prev => prev.map(d => {
+        if (d.id === activeDiscussionId) {
+          return { ...d, messages: [welcomeMsg] };
         }
-      ]);
+        return d;
+      }));
+      saveChat([welcomeMsg]);
     }
   };
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const val = e.target.value;
     setCofounderInput(val);
 
@@ -986,6 +1567,13 @@ export default function CoFounderPage() {
       setSlashFilter(val.slice(1).toLowerCase());
     } else {
       setShowSlashMenu(false);
+    }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
     }
   };
 
@@ -1009,6 +1597,112 @@ export default function CoFounderPage() {
       {/* Left Column: Startup Panel & Tools info */}
       {!showWorkspace && (
         <div className="hidden lg:flex flex-col w-64 bg-white border-r border-[#E8EAED] p-4 space-y-5 flex-shrink-0 overflow-y-auto custom-scrollbar">
+          {/* New Discussion Button */}
+          <button
+            type="button"
+            onClick={handleCreateNewDiscussion}
+            className="w-full flex items-center justify-center gap-2 py-2 px-4 rounded-xl font-semibold text-xs text-white transition-all duration-200 hover:shadow-md hover:brightness-105 active:scale-98"
+            style={{
+              background: 'linear-gradient(135deg, #1A73E8, #1557B0)',
+              boxShadow: '0 2px 4px rgba(26,115,232,0.2)'
+            }}
+          >
+            <span className="text-sm font-bold">＋</span> Nuova Conversazione
+          </button>
+
+          {/* Discussions Section */}
+          <div className="flex flex-col space-y-2">
+            <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider px-1">Discussioni</h3>
+            <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
+              {discussions.map(d => {
+                const isActive = d.id === activeDiscussionId;
+                return (
+                  <div
+                    key={d.id}
+                    onClick={() => handleSwitchDiscussion(d.id)}
+                    className={`group flex items-center justify-between px-3 py-2 rounded-xl cursor-pointer transition-all border ${
+                      isActive
+                        ? 'bg-[#E8F0FE] border-[#1A73E8] text-[#1A73E8]'
+                        : 'bg-white border-[#E8EAED] hover:bg-[#F8F9FA] hover:border-[#DADCE0] text-[#3C4043]'
+                    }`}
+                  >
+                    {editingDiscussionId === d.id ? (
+                      <input
+                        type="text"
+                        value={editingTitle}
+                        onChange={e => setEditingTitle(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            handleRenameDiscussionSubmit(d.id, editingTitle);
+                          } else if (e.key === 'Escape') {
+                            setEditingDiscussionId(null);
+                          }
+                        }}
+                        onBlur={() => handleRenameDiscussionSubmit(d.id, editingTitle)}
+                        autoFocus
+                        onClick={e => e.stopPropagation()}
+                        className="w-full text-xs px-2 py-1 rounded border border-[#1A73E8] focus:outline-none bg-white text-[#202124] font-medium"
+                      />
+                    ) : (
+                      <>
+                        <div className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="text-xs flex-shrink-0 flex items-center justify-center">
+                            {d.isGenerating ? (
+                              <span className="relative flex h-2.5 w-2.5 mr-0.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1A73E8] opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[#1A73E8]"></span>
+                              </span>
+                            ) : (
+                              '💬'
+                            )}
+                          </span>
+                          <span className="text-xs font-medium truncate">{d.title}</span>
+                          {d.isGenerating && (
+                            <span className="text-[9px] font-semibold text-[#1A73E8] animate-pulse uppercase ml-auto pr-1.5 flex-shrink-0">Genera...</span>
+                          )}
+                        </div>
+                        
+                        <div className="flex items-center gap-0.5 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingDiscussionId(d.id);
+                              setEditingTitle(d.title);
+                            }}
+                            className={`p-1 rounded-md text-[#5F6368] hover:text-[#1A73E8] hover:bg-white/80 transition-all focus:outline-none ${
+                              isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            }`}
+                            title="Rinomina conversazione"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                              <path d="M12 20h9"></path>
+                              <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+                            </svg>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={(e) => handleDeleteDiscussion(d.id, e)}
+                            className={`p-1 rounded-md text-[#5F6368] hover:text-[#EA4335] hover:bg-white/80 transition-all focus:outline-none ${
+                              isActive ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'
+                            }`}
+                            title="Elimina discussione"
+                          >
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-3.5 h-3.5">
+                              <polyline points="3 6 5 6 21 6"></polyline>
+                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                            </svg>
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
           {startupInfo ? (
             <div className="p-4 rounded-xl border border-[#E8EAED]" style={{ background: '#FAFAFA' }}>
               <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider mb-2">Startup in Analisi</h3>
@@ -1060,7 +1754,8 @@ export default function CoFounderPage() {
       )}
 
       {/* Main Chat Area */}
-      <div className="flex-1 min-w-0 flex flex-col h-full bg-[#FAFAFA] relative">
+      {(!showWorkspace || !isWorkspaceFullScreen) && (
+        <div className="flex-1 min-w-0 flex flex-col h-full bg-[#FAFAFA] relative">
         {/* Chat Header */}
         <div className="flex items-center justify-between px-6 py-3 bg-white border-b border-[#E8EAED]">
           <div className="flex items-center gap-3">
@@ -1080,7 +1775,12 @@ export default function CoFounderPage() {
             {artifacts.length > 0 && (
               <button
                 type="button"
-                onClick={() => setShowWorkspace(!showWorkspace)}
+                onClick={() => {
+                  if (showWorkspace) {
+                    setIsWorkspaceFullScreen(false);
+                  }
+                  setShowWorkspace(!showWorkspace);
+                }}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-all focus:outline-none ${
                   showWorkspace
                     ? 'bg-[#E8F0FE] border-[#1A73E8] text-[#1A73E8]'
@@ -1095,7 +1795,13 @@ export default function CoFounderPage() {
         </div>
 
         {/* Message Panel */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 custom-scrollbar">
+        <div
+          ref={chatContainerRef}
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar"
+          style={{ background: '#F8F9FA' }}
+        >
+          <div className="max-w-3xl mx-auto space-y-6 py-4">
           {cofounderMessages.map((msg, index) => (
             <div key={index} className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
               <div
@@ -1109,7 +1815,7 @@ export default function CoFounderPage() {
               >
                 <div className="space-y-1">
                   {msg.content 
-                    ? formatMessageContent(msg.content, openArtifactInWorkspace) 
+                    ? formatMessageContent(msg.content, openArtifactInWorkspace, msg.role === 'assistant') 
                     : msg.isStreaming 
                       ? <span className="text-[#9AA0AC] animate-pulse italic">Il CoFounder sta elaborando la risposta...</span>
                       : null
@@ -1118,6 +1824,7 @@ export default function CoFounderPage() {
 
                 {msg.role === 'assistant' && (msg.thinking || (msg.tools && msg.tools.length > 0)) && (
                   <details 
+                    key={msg.isStreaming ? 'open' : 'closed'}
                     className="group mb-3 mt-3 border border-[#DADCE0] rounded-xl bg-[#F8F9FA]/80 backdrop-blur-sm shadow-[0_2px_8px_rgba(0,0,0,0.04)] overflow-hidden w-full transition-all duration-300"
                     open={msg.isStreaming}
                   >
@@ -1171,7 +1878,23 @@ export default function CoFounderPage() {
                             <span className="text-[9px] text-[#9AA0AC] font-mono ml-auto">({del.duration})</span>
                           </div>
                           <p className="text-[10px] text-[#3C4043] font-medium font-mono bg-white p-1.5 rounded border border-[#E8EAED] mb-1.5">Task: {del.task}</p>
-                          <div className="text-[10px] leading-relaxed text-[#202124] p-1.5 bg-white rounded border border-[#E8EAED]">{formatMessageContent(del.response, openArtifactInWorkspace)}</div>
+                          {del.visibleToUser ? (
+                            <div className="text-[10px] leading-relaxed text-[#202124] p-1.5 bg-white rounded border border-[#E8EAED]">{formatMessageContent(del.response, openArtifactInWorkspace)}</div>
+                          ) : (
+                            <details className="mt-1.5 group">
+                              <summary className="list-none flex items-center gap-1.5 text-[9px] text-[#5F6368] font-bold uppercase tracking-wider cursor-pointer select-none hover:text-[#1A73E8] transition-colors">
+                                <span>📄 Risposta interna (Clicca per mostrare)</span>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" 
+                                  className="w-2.5 h-2.5 transform group-open:rotate-180 transition-transform duration-200 text-[#70757a]"
+                                >
+                                  <polyline points="6 9 12 15 18 9"></polyline>
+                                </svg>
+                              </summary>
+                              <div className="mt-2 text-[10px] leading-relaxed text-[#202124] p-2 bg-white rounded border border-[#E8EAED] max-h-[250px] overflow-y-auto custom-scrollbar">
+                                {formatMessageContent(del.response, openArtifactInWorkspace)}
+                              </div>
+                            </details>
+                          )}
                         </div>
                       );
                     })}
@@ -1228,7 +1951,7 @@ export default function CoFounderPage() {
 
               {activeDelegations.length > 0 && (
                 <div className="space-y-1.5 w-full">
-                  {activeDelegations.map((del, dIdx) => {
+                  {activeDelegations.map((del: any, dIdx: number) => {
                     const color = AGENT_COLORS[del.agentType] || AGENT_COLORS.strategy;
                     return (
                       <div key={dIdx} className="flex items-center gap-2 text-[10px] bg-white/70 border border-[#E8EAED] px-3 py-1.5 rounded-xl max-w-sm shadow-xs">
@@ -1269,17 +1992,25 @@ export default function CoFounderPage() {
           )}
 
           <div ref={chatEndRef} />
+          </div>
         </div>
 
         {/* Coda Prompt */}
-        {promptQueue.length > 0 && (
+        {(activeDiscussion?.promptQueue || []).length > 0 && (
           <div className="mx-6 mb-2 px-3 py-1.5 bg-[#E6F4EA] border border-[#A7F3D0] rounded-lg flex items-center justify-between animate-fade-in z-20">
             <span className="text-[11px] text-[#065F46] font-semibold flex items-center gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-[#059669] animate-ping" />
-              {promptQueue.length} {promptQueue.length === 1 ? 'prompt in attesa' : 'prompt in coda'}
+              {(activeDiscussion?.promptQueue || []).length} {(activeDiscussion?.promptQueue || []).length === 1 ? 'prompt in attesa' : 'prompt in coda'}
             </span>
             <button
-              onClick={() => setPromptQueue([])}
+              onClick={() => {
+                setDiscussions(prev => prev.map(d => {
+                  if (d.id === activeDiscussionId) {
+                    return { ...d, promptQueue: [] };
+                  }
+                  return d;
+                }));
+              }}
               className="text-[10px] text-[#065F46] hover:underline font-bold"
             >
               Svuota
@@ -1288,66 +2019,88 @@ export default function CoFounderPage() {
         )}
 
         {/* Input Bar */}
-        <form onSubmit={handleSendMessage} className="p-4 bg-white border-t border-[#E8EAED] flex items-center gap-3 relative z-30">
-          {/* Slash Commands Dropdown */}
-          {showSlashMenu && slashCommands.length > 0 && (
-            <div className="absolute bottom-full left-4 mb-2 w-64 bg-white border border-[#E8EAED] rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
-              <div className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#9AA0AC] bg-[#F8F9FA] border-b border-[#E8EAED]">
-                Comandi rapidi
+        <form
+          onSubmit={handleSendMessage}
+          className="px-5 pb-5 pt-2 relative z-30 w-full"
+          style={{ background: '#F8F9FA' }}
+        >
+          <div className="flex items-end gap-3 max-w-3xl mx-auto w-full relative">
+            {/* Slash Commands Dropdown */}
+            {showSlashMenu && slashCommands.length > 0 && (
+              <div className="absolute bottom-full left-0 mb-2 w-64 bg-white border border-[#E8EAED] rounded-xl shadow-2xl overflow-hidden z-50 animate-fade-in">
+                <div className="px-3 py-1.5 text-[9px] font-bold uppercase tracking-wider text-[#9AA0AC] bg-[#F8F9FA] border-b border-[#E8EAED]">
+                  Comandi rapidi
+                </div>
+                <div className="max-h-48 overflow-y-auto">
+                  {slashCommands.map(c => (
+                    <button
+                      key={c.cmd}
+                      type="button"
+                      onClick={() => applySlashCommand(c.cmd)}
+                      className="w-full text-left px-3 py-2 text-xs hover:bg-[#F1F3F4] flex items-center justify-between border-b border-[#E8EAED]/40 last:border-0"
+                    >
+                      <span className="font-mono font-bold text-[#1A73E8]">{c.cmd}</span>
+                      <span className="text-[10px] text-[#5F6368]">{c.desc}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="max-h-48 overflow-y-auto">
-                {slashCommands.map(c => (
-                  <button
-                    key={c.cmd}
-                    type="button"
-                    onClick={() => applySlashCommand(c.cmd)}
-                    className="w-full text-left px-3 py-2 text-xs hover:bg-[#F1F3F4] flex items-center justify-between border-b border-[#E8EAED]/40 last:border-0"
-                  >
-                    <span className="font-mono font-bold text-[#1A73E8]">{c.cmd}</span>
-                    <span className="text-[10px] text-[#5F6368]">{c.desc}</span>
-                  </button>
-                ))}
-              </div>
+            )}
+
+            <div
+              className="flex-1 flex items-end rounded-[28px] overflow-hidden transition-all bg-[#F0F4F9] border border-transparent shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+              style={{ minHeight: '52px' }}
+              onFocusCapture={e => {
+                e.currentTarget.style.borderColor = '#E8EAED';
+                e.currentTarget.style.background = '#FFFFFF';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.05)';
+              }}
+              onBlurCapture={e => {
+                e.currentTarget.style.borderColor = 'transparent';
+                e.currentTarget.style.background = '#F0F4F9';
+                e.currentTarget.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)';
+              }}
+            >
+              <textarea
+                ref={cofounderTextareaRef}
+                placeholder={cofounderLoading ? '⏳ In attesa della risposta...' : 'Scrivi un messaggio o digita / per i comandi...'}
+                value={cofounderInput}
+                onChange={handleInputChange}
+                onKeyDown={handleKeyDown}
+                rows={1}
+                className="flex-1 pl-6 pr-4 py-3.5 bg-transparent resize-none focus:outline-none text-xs placeholder-gray-500 font-medium"
+                style={{ color: '#202124', minHeight: '52px', maxHeight: '160px', lineHeight: '20px' }}
+              />
+              {cofounderLoading && !cofounderInput.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => handleStopGeneration(activeDiscussionId!)}
+                  className="m-2 w-9 h-9 rounded-full flex items-center justify-center bg-[#EA4335] text-white shadow-md hover:bg-[#D93025] transition flex-shrink-0"
+                  title="Interrompi generazione"
+                >
+                  <div className="w-2.5 h-2.5 bg-white rounded-xs" />
+                </button>
+              ) : (
+                <button
+                  type="submit"
+                  disabled={!cofounderInput.trim() && !cofounderLoading}
+                  className="m-2 w-9 h-9 rounded-full flex items-center justify-center text-white transition-all disabled:opacity-40 disabled:bg-[#DADCE0] disabled:shadow-none flex-shrink-0"
+                  style={{ background: '#1A73E8', boxShadow: '0 2px 4px rgba(26,115,232,0.2)' }}
+                  title="Invia"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                    <path d="M5 12h14M12 5l7 7-7 7" />
+                  </svg>
+                </button>
+              )}
             </div>
-          )}
-
-          <div className="flex-1 relative">
-            <input
-              type="text"
-              placeholder={cofounderLoading ? '⏳ In attesa della risposta...' : 'Scrivi un messaggio o digita / per i comandi...'}
-              value={cofounderInput}
-              onChange={handleInputChange}
-              className="w-full px-4 py-2.5 rounded-xl border border-[#E8EAED] focus:outline-none focus:border-[#1A73E8] text-xs"
-              style={{ background: '#FAFAFA', color: '#202124' }}
-            />
           </div>
-
-          {cofounderLoading && !cofounderInput.trim() ? (
-            <button
-              type="button"
-              onClick={handleStopGeneration}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-[#EA4335] text-white shadow-md hover:bg-[#D93025] transition"
-              title="Interrompi generazione"
-            >
-              <div className="w-2.5 h-2.5 bg-white rounded-xs" />
-            </button>
-          ) : (
-            <button
-              type="submit"
-              disabled={!cofounderInput.trim() && !cofounderLoading}
-              className="w-8 h-8 rounded-xl flex items-center justify-center bg-[#1A73E8] text-white shadow-md hover:bg-[#1557B0] transition disabled:opacity-40"
-              title="Invia"
-            >
-              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-              </svg>
-            </button>
-          )}
         </form>
       </div>
+      )}
 
       {/* Vertical Resize Splitter */}
-      {showWorkspace && (
+      {showWorkspace && !isWorkspaceFullScreen && (
         <div
           onMouseDown={handleResizeMouseDown}
           className="w-[8px] hover:w-[10px] cursor-col-resize select-none flex-shrink-0 flex items-center justify-center relative z-40 group transition-all"
@@ -1367,7 +2120,8 @@ export default function CoFounderPage() {
       {/* Artifacts Workspace Panel */}
       {showWorkspace && (
         <div
-          style={{ width: `${workspaceWidth}px` }}
+          ref={workspaceRef}
+          style={{ width: isWorkspaceFullScreen ? '100%' : `${workspaceWidth}px` }}
           className="bg-[#181818] text-[#D4D4D4] border-l border-[#2D2D2D] h-full flex flex-col flex-shrink-0 relative overflow-hidden"
         >
           {/* Workspace Header */}
@@ -1411,9 +2165,22 @@ export default function CoFounderPage() {
                   Split
                 </button>
               </div>
+
             </div>
             
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setConsoleOpen(!consoleOpen)}
+                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-bold transition shadow-sm focus:outline-none ${
+                  consoleOpen
+                    ? 'bg-[#1A73E8] text-white hover:bg-[#1557B0]'
+                    : 'bg-[#2d2d2d] text-[#e3e6eb] hover:bg-[#3d3d3d] border border-[#3d3d3d]'
+                }`}
+              >
+                <span>🖥️</span> Console
+              </button>
+
               <button
                 type="button"
                 onClick={handleRunCode}
@@ -1421,10 +2188,30 @@ export default function CoFounderPage() {
               >
                 <span>▶</span> Run
               </button>
+
+              <button
+                type="button"
+                onClick={() => setIsWorkspaceFullScreen(!isWorkspaceFullScreen)}
+                className="p-1 rounded-md text-[#8e949e] hover:text-[#e3e6eb] transition focus:outline-none flex items-center justify-center"
+                title={isWorkspaceFullScreen ? "Metà Schermo" : "Schermo Intero"}
+              >
+                {isWorkspaceFullScreen ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4">
+                    <path d="M4 14h6v6m0-6l-6 6m16-6h-6v6m0-6l6 6M4 10h6V4m0 6L4 4m16 6h-6V4m0 6l6-6"/>
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                    <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+                  </svg>
+                )}
+              </button>
               
               <button
                 type="button"
-                onClick={() => setShowWorkspace(false)}
+                onClick={() => {
+                  setShowWorkspace(false);
+                  setIsWorkspaceFullScreen(false);
+                }}
                 className="text-[#8e949e] hover:text-[#e3e6eb] text-sm font-semibold focus:outline-none"
                 title="Collapse Workspace"
               >
@@ -1433,26 +2220,32 @@ export default function CoFounderPage() {
             </div>
           </div>
 
-          {/* File Tabs Bar */}
-          <div className="flex items-center bg-[#151515] border-b border-[#2d2d2d] overflow-x-auto custom-scrollbar flex-shrink-0">
-            {artifacts.map(art => {
-              const isActive = activeArtifact?.id === art.id;
-              return (
-                <button
-                  key={art.id}
-                  type="button"
-                  onClick={() => setActiveArtifact(art)}
-                  className={`px-4 py-2 text-xs font-mono border-r border-[#2d2d2d] transition-all flex items-center gap-2 focus:outline-none ${
-                    isActive
-                      ? 'bg-[#1e1e1e] text-[#ffffff] border-t-2 border-t-[#1A73E8] font-semibold'
-                      : 'text-[#8e949e] hover:bg-[#1c1c1c] hover:text-[#d4d4d4]'
-                  }`}
-                >
-                  <span>📄</span>
-                  {art.filename}
-                </button>
-              );
-            })}
+          {/* File Selector Dropdown */}
+          <div className="flex items-center px-4 py-2 bg-[#151515] border-b border-[#2d2d2d] flex-shrink-0 gap-3">
+            <span className="text-[10px] font-bold text-[#8e949e] uppercase tracking-wider font-mono flex items-center gap-1.5">
+              <span>📁</span> File Attivo:
+            </span>
+            <div className="relative flex-1 max-w-[280px]">
+              <select
+                value={activeArtifact?.id || ''}
+                onChange={(e) => {
+                  const art = artifacts.find(a => a.id === e.target.value);
+                  if (art) setActiveArtifact(art);
+                }}
+                className="w-full bg-[#1e1e1e] text-xs font-mono text-[#e3e6eb] border border-[#2d2d2d] rounded-lg pl-3 pr-8 py-1.5 focus:outline-none focus:border-[#1A73E8] focus:ring-1 focus:ring-[#1A73E8] cursor-pointer appearance-none"
+              >
+                {artifacts.map(art => (
+                  <option key={art.id} value={art.id} className="bg-[#1e1e1e] text-[#e3e6eb] py-2">
+                    {art.filename}
+                  </option>
+                ))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-[#8e949e]">
+                <svg className="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20">
+                  <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z"/>
+                </svg>
+              </div>
+            </div>
           </div>
 
           {/* Main workspace contents */}
@@ -1477,11 +2270,7 @@ export default function CoFounderPage() {
                     {/* Textarea code editor */}
                     <textarea
                       value={activeArtifact.code || ''}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        setActiveArtifact(prev => prev ? { ...prev, code: val } : null);
-                        setEditedCodes(prev => ({ ...prev, [activeArtifact.id]: val }));
-                      }}
+                      onChange={(e) => handleArtifactChange(e.target.value)}
                       onScroll={handleEditorScroll}
                       className="flex-1 bg-[#1e1e1e] text-[#e3e6eb] py-3 px-4 outline-none resize-none font-mono text-xs overflow-auto custom-scrollbar border-0 focus:ring-0 focus:outline-none h-full"
                       style={{
@@ -1502,7 +2291,7 @@ export default function CoFounderPage() {
                         key={iframeKey}
                         srcDoc={previewUrl}
                         sandbox="allow-scripts allow-same-origin allow-modals"
-                        className="w-full h-full border-0 bg-white"
+                        className={`w-full h-full border-0 bg-white ${isDragging ? 'pointer-events-none' : ''}`}
                         title="Web App Preview"
                       />
                     ) : (

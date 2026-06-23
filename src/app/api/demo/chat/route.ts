@@ -3,6 +3,9 @@ import { AVAILABLE_MODELS } from "@/lib/models";
 import { recall, autoExtractMemories } from "@/lib/mnemosyne";
 import { promises as fs } from "fs";
 import * as path from "path";
+import { getApiKey } from "@/lib/secure-store";
+import { getArtifacts, saveArtifacts, Artifact } from "@/lib/custom-artifacts";
+import { executePython, executeTypeScript } from "@/lib/sandbox-runner";
 
 const DEFAULT_MODEL = "openrouter/owl-alpha";
 const METRICS_FILE_PATH = path.join(process.cwd(), "src/lib/custom-metrics.json");
@@ -267,6 +270,34 @@ async function searchWeb(query: string): Promise<any[]> {
   }
 }
 
+async function searchTavily(query: string, apiKey: string): Promise<any[]> {
+  try {
+    const res = await fetch("https://api.tavily.com/search", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        api_key: apiKey,
+        query: query,
+        max_results: 5,
+      }),
+    });
+    if (!res.ok) {
+      throw new Error(`Tavily API responded with status ${res.status}`);
+    }
+    const data = await res.json();
+    return (data.results || []).map((r: any) => ({
+      title: r.title,
+      snippet: r.content,
+      link: r.url,
+    }));
+  } catch (err: any) {
+    console.error("Tavily search error:", err);
+    throw err;
+  }
+}
+
 async function readWebPage(url: string): Promise<string> {
   try {
     if (!url.startsWith("http://") && !url.startsWith("https://")) {
@@ -394,51 +425,83 @@ function parseLongcat(buffer: string) {
 
 function processStreamBuffer(
   buffer: string,
-  isBuffering: boolean
+  isBufferingLongcat: boolean,
+  isBufferingThought: boolean
 ): {
   flushText: string;
+  flushThinking: string;
   newBuffer: string;
-  newIsBuffering: boolean;
+  newIsBufferingLongcat: boolean;
+  newIsBufferingThought: boolean;
   toolCallFound: { name: string; arguments: string } | null;
 } {
-  const TARGET_START = "<longcat_tool_call>";
-  const TARGET_END = "</longcat_tool_call>";
+  const THOUGHT_START = "<thought>";
+  const THOUGHT_END = "</thought>";
+  const LONGCAT_START = "<longcat_tool_call>";
+  const LONGCAT_END = "</longcat_tool_call>";
 
   let currentBuffer = buffer;
-  let currentIsBuffering = isBuffering;
+  let currentIsBufferingLongcat = isBufferingLongcat;
+  let currentIsBufferingThought = isBufferingThought;
   let flushText = "";
+  let flushThinking = "";
   let toolCallFound: { name: string; arguments: string } | null = null;
 
   let changed = true;
   while (changed) {
     changed = false;
 
-    if (currentIsBuffering) {
-      const endIdx = currentBuffer.indexOf(TARGET_END);
+    if (currentIsBufferingLongcat) {
+      const endIdx = currentBuffer.indexOf(LONGCAT_END);
       if (endIdx !== -1) {
-        const fullBlockEnd = endIdx + TARGET_END.length;
+        const fullBlockEnd = endIdx + LONGCAT_END.length;
         const xmlBlock = currentBuffer.substring(0, fullBlockEnd);
         const parsed = parseLongcat(xmlBlock);
         if (parsed) {
           toolCallFound = parsed;
         }
         currentBuffer = currentBuffer.substring(fullBlockEnd);
-        currentIsBuffering = false;
+        currentIsBufferingLongcat = false;
         changed = true;
       }
+    } else if (currentIsBufferingThought) {
+      const endIdx = currentBuffer.indexOf(THOUGHT_END);
+      if (endIdx !== -1) {
+        flushThinking += currentBuffer.substring(0, endIdx);
+        currentBuffer = currentBuffer.substring(endIdx + THOUGHT_END.length);
+        currentIsBufferingThought = false;
+        changed = true;
+      } else {
+        const holdBack = THOUGHT_END.length - 1;
+        if (currentBuffer.length > holdBack) {
+          flushThinking += currentBuffer.substring(0, currentBuffer.length - holdBack);
+          currentBuffer = currentBuffer.substring(currentBuffer.length - holdBack);
+        }
+      }
     } else {
-      const startIdx = currentBuffer.indexOf(TARGET_START);
-      if (startIdx !== -1) {
-        flushText += currentBuffer.substring(0, startIdx);
-        currentBuffer = currentBuffer.substring(startIdx);
-        currentIsBuffering = true;
+      const thoughtStartIdx = currentBuffer.indexOf(THOUGHT_START);
+      const longcatStartIdx = currentBuffer.indexOf(LONGCAT_START);
+
+      if (thoughtStartIdx !== -1 && (longcatStartIdx === -1 || thoughtStartIdx < longcatStartIdx)) {
+        flushText += currentBuffer.substring(0, thoughtStartIdx);
+        currentBuffer = currentBuffer.substring(thoughtStartIdx + THOUGHT_START.length);
+        currentIsBufferingThought = true;
+        changed = true;
+      } else if (longcatStartIdx !== -1 && (thoughtStartIdx === -1 || longcatStartIdx < thoughtStartIdx)) {
+        flushText += currentBuffer.substring(0, longcatStartIdx);
+        currentBuffer = currentBuffer.substring(longcatStartIdx);
+        currentIsBufferingLongcat = true;
         changed = true;
       } else {
         let matchedPrefixLength = 0;
-        for (let len = Math.min(TARGET_START.length - 1, currentBuffer.length); len > 0; len--) {
+        const maxPrefixLen = Math.max(THOUGHT_START.length, LONGCAT_START.length) - 1;
+
+        for (let len = Math.min(maxPrefixLen, currentBuffer.length); len > 0; len--) {
           const suffix = currentBuffer.substring(currentBuffer.length - len);
-          const prefix = TARGET_START.substring(0, len);
-          if (suffix === prefix) {
+          const thoughtPrefix = THOUGHT_START.substring(0, len);
+          const longcatPrefix = LONGCAT_START.substring(0, len);
+
+          if (suffix === thoughtPrefix || suffix === longcatPrefix) {
             matchedPrefixLength = len;
             break;
           }
@@ -457,8 +520,10 @@ function processStreamBuffer(
 
   return {
     flushText,
+    flushThinking,
     newBuffer: currentBuffer,
-    newIsBuffering: currentIsBuffering,
+    newIsBufferingLongcat: currentIsBufferingLongcat,
+    newIsBufferingThought: currentIsBufferingThought,
     toolCallFound,
   };
 }
@@ -697,7 +762,7 @@ ${matchedPatterns.map((p: any) => {
           // Construct tools description for system prompt dynamically
           const toolDescItems: string[] = [];
           if (enabledTools.includes("webSearch")) {
-            toolDescItems.push(`- 'webSearch': ${customDescriptions.webSearch || "Esegue una ricerca in tempo reale su internet tramite DuckDuckGo per trovare notizie recenti, trend, informazioni finanziarie e link utili."}`);
+            toolDescItems.push(`- 'webSearch': ${customDescriptions.webSearch || "Esegue una ricerca in tempo reale su internet (tramite Tavily Search o DuckDuckGo come fallback) per trovare notizie recenti, trend, informazioni finanziarie e link utili."}`);
           }
           if (enabledTools.includes("readWebPage")) {
             toolDescItems.push(`- 'readWebPage': ${customDescriptions.readWebPage || "Scarica e legge il testo completo di una pagina web/URL specifico per estrarre articoli, notizie fresche o documentazioni dettagliate."}`);
@@ -719,11 +784,13 @@ ${matchedPatterns.map((p: any) => {
           let rulesSection = "";
           if (enabledTools.includes("webSearch") || enabledTools.includes("readWebPage")) {
             rulesSection = `\nRegole operative:
-- Hai accesso in tempo reale a internet: quando l'utente ti chiede notizie recenti, trend, o eventi esterni, usa sempre 'webSearch' ed eventualmente 'readWebPage' per leggere la pagina di notizie e riportare i fatti esatti.
+- Hai accesso in tempo reale a internet tramite Tavily Search (con DuckDuckGo come fallback). Quando l'utente ti chiede notizie recenti, trend, o eventi esterni, usa sempre 'webSearch' ed eventualmente 'readWebPage' per leggere la pagina di notizie e riportare i fatti esatti.
+- Ottimizzazione ricerche (Tavily): Tavily è ottimizzato per ricerche semantiche ed LLM. Puoi formulare query espresse anche sotto forma di domande complete o frasi naturali (es: "Quali sono i principali competitor di Notion nel 2026?").
 - Non dire mai all'utente che non hai accesso in tempo reale a internet o che non puoi leggere le notizie. Se ti viene chiesto di cercare notizie (es: ANSA o ultime novità), usa 'webSearch' per trovare i link pertinenti, e subito dopo usa 'readWebPage' sull'URL per estrarre e riportare i titoli delle notizie di oggi.`;
           }
 
-          const systemPrompt = `${getSystemPrompt(agentType)}
+          const basePrompt = (agentConfig.settings as any)?.systemPrompt || getSystemPrompt(agentType);
+          const systemPrompt = `${basePrompt}
 
 Informazioni Startup (${startup.name}):
 - Settore: ${startup.sector}
@@ -737,6 +804,8 @@ ${patternIndex}${playbookContext}${crossAgentContext}${mnemosyneContext}
 
 ${toolsSection}
 ${rulesSection}
+- REASONING LOOP (OBBLIGATORIO): Prima di formulare qualsiasi risposta o prima di richiedere l'uso di uno strumento, devi analizzare la situazione ed elaborare il tuo ragionamento all'interno dei tag <thought>...</thought>.
+- CONTROLLO OUTPUT (CRITICO): Se stai chiamando uno strumento (tool), NON scrivere nulla al di fuori dei tag <thought>...</thought>. Solo quando hai finito di usare gli strumenti e sei pronto per la risposta finale rivolta al founder, scriverai il testo della risposta finale al di fuori dei tag <thought>...</thought>. Tutto ciò che è ragionamento intermedio o spiegazione del tool deve stare dentro i tag di pensiero per non essere mostrato direttamente al founder.
 - Fornisci consigli pratici e specifici per la situazione attuale della startup. Sii conciso ma esaustivo.`;
 
           const apiMessages = [
@@ -777,11 +846,11 @@ ${rulesSection}
               type: "function",
               function: {
                 name: "webSearch",
-                description: customDescriptions.webSearch || "Esegue una ricerca web su Internet in tempo reale per reperire informazioni aggiornate, notizie, trend di mercato e dati finanziari utili.",
+                description: customDescriptions.webSearch || "Esegue una ricerca web su Internet in tempo reale tramite Tavily Search (o DuckDuckGo in fallback) per reperire informazioni aggiornate, notizie, trend di mercato e dati finanziari utili.",
                 parameters: {
                   type: "object",
                   properties: {
-                    query: { type: "string", description: "La query di ricerca testuale (es: 'trend SaaS 2026', 'valutazione media seed AI')." }
+                    query: { type: "string", description: "La query di ricerca testuale o domanda naturale (es: 'trend SaaS 2026', 'valutazione media seed AI', 'qual è la crescita annua di Shopify?')." }
                   },
                   required: ["query"]
                 }
@@ -827,6 +896,51 @@ ${rulesSection}
               }
             });
           }
+
+          // Always equip agents with artifact tools
+          tools.push({
+            type: "function",
+            function: {
+              name: "createOrUpdateArtifact",
+              description: "Crea o aggiorna un artefatto persistente di codice (es. script Python, pagina HTML interattiva, codice TS) per far calcoli, simulazioni o creare interfacce utente. L'artefatto sarà mostrato in chat come scheda interattiva.",
+              parameters: {
+                type: "object",
+                properties: {
+                  id: { type: "string", description: "L'id univoco dell'artefatto (opzionale per la creazione, obbligatorio per l'aggiornamento)." },
+                  title: { type: "string", description: "Il titolo descrittivo dell'artefatto (es: 'Simulazione CAGR', 'Grafico Runway')." },
+                  filename: { type: "string", description: "Il nome del file (es: 'cagr.py', 'dashboard.html', 'priorities.ts')." },
+                  code: { type: "string", description: "Il codice sorgente completo." },
+                  language: { type: "string", description: "Il linguaggio di programmazione (es: 'python', 'html', 'typescript')." },
+                  type: { type: "string", enum: ["code", "web", "data"], description: "Il tipo di artefatto: 'web' per HTML/CSS/JS interattivo, 'code' per script eseguibili, 'data' per file JSON/CSV." }
+                },
+                required: ["title", "filename", "code", "language", "type"]
+              }
+            }
+          });
+
+          tools.push({
+            type: "function",
+            function: {
+              name: "runArtifact",
+              description: "Manda in esecuzione un artefatto di codice (Python/JS/TS) esistente e memorizza i log di console e gli output di esecuzione. Utilizza getActiveArtifacts o crea prima l'artefatto.",
+              parameters: {
+                type: "object",
+                properties: {
+                  artifactId: { type: "string", description: "L'ID univoco dell'artefatto da eseguire." }
+                },
+                required: ["artifactId"]
+              }
+            }
+          });
+
+          tools.push({
+            type: "function",
+            function: {
+              name: "getActiveArtifacts",
+              description: "Recupera la lista di tutti gli artefatti salvati finora nel workspace per visualizzarne gli ID, i titoli e i codici.",
+              parameters: { type: "object", properties: {} }
+            }
+          });
 
           console.log("[Chat Stream] starting ReAct loop. Model:", modelToUse);
           push("debug", `🖥️ Generazione risposta in corso con il modello: ${modelInfo?.name || modelToUse}...`);
@@ -882,6 +996,7 @@ ${rulesSection}
 
             let streamTextBuffer = "";
             let isBufferingLongcat = false;
+            let isBufferingThought = false;
 
             while (!done && reader) {
               const { value, done: doneReading } = await reader.read();
@@ -925,14 +1040,26 @@ ${rulesSection}
                     if (delta.content) {
                       const text = delta.content;
                       streamTextBuffer += text;
-                      const streamRes = processStreamBuffer(streamTextBuffer, isBufferingLongcat);
+                      const streamRes = processStreamBuffer(
+                        streamTextBuffer,
+                        isBufferingLongcat,
+                        isBufferingThought
+                      );
                       streamTextBuffer = streamRes.newBuffer;
-                      isBufferingLongcat = streamRes.newIsBuffering;
+                      isBufferingLongcat = streamRes.newIsBufferingLongcat;
+                      isBufferingThought = streamRes.newIsBufferingThought;
+
+                      if (streamRes.flushThinking) {
+                        reasoningText += streamRes.flushThinking;
+                        push("thinking", streamRes.flushThinking);
+                      }
+
                       if (streamRes.flushText) {
                         currentAssistantText += streamRes.flushText;
                         replyText += streamRes.flushText;
                         push("text", streamRes.flushText);
                       }
+
                       if (streamRes.toolCallFound) {
                         isToolCallRequested = true;
                         toolCallId = "call_" + Date.now();
@@ -960,6 +1087,16 @@ ${rulesSection}
                   toolFunctionName = parsedTool.name;
                   toolArguments = parsedTool.arguments;
                 }
+              } else if (isBufferingThought || streamTextBuffer.includes("<thought>")) {
+                let thoughtText = streamTextBuffer;
+                if (thoughtText.startsWith("<thought>")) {
+                  thoughtText = thoughtText.substring(9);
+                }
+                if (thoughtText.endsWith("</thought>")) {
+                  thoughtText = thoughtText.substring(0, thoughtText.length - 10);
+                }
+                reasoningText += thoughtText;
+                push("thinking", thoughtText);
               } else {
                 currentAssistantText += streamTextBuffer;
                 replyText += streamTextBuffer;
@@ -1009,7 +1146,24 @@ Fattori di fallimento / errori da evitare: ${p.failureModes?.join(", ") || "ness
                 }
                 toolContent = content;
               } else if (toolFunctionName === "webSearch") {
-                const searchResults = await searchWeb(args.query || "");
+                let searchResults;
+                if (settings?.useTavily) {
+                  const tavilyKey = await getApiKey("tavily");
+                  if (tavilyKey) {
+                    try {
+                      searchResults = await searchTavily(args.query || "", tavilyKey);
+                      push("debug", `🔍 Ricerca web effettuata tramite Tavily per: "${args.query}"`);
+                    } catch (e: any) {
+                      push("debug", `⚠️ Errore Tavily, fallback su DuckDuckGo: ${e.message}`);
+                      searchResults = await searchWeb(args.query || "");
+                    }
+                  } else {
+                    push("debug", "⚠️ Tavily abilitato ma chiave non configurata, fallback su DuckDuckGo");
+                    searchResults = await searchWeb(args.query || "");
+                  }
+                } else {
+                  searchResults = await searchWeb(args.query || "");
+                }
                 toolContent = JSON.stringify(searchResults);
               } else if (toolFunctionName === "getStartupInfo") {
                 const freshStartup = await supabaseFetch(`/Startup?id=eq.${startup.id}&select=*`);
@@ -1021,6 +1175,89 @@ Fattori di fallimento / errori da evitare: ${p.failureModes?.join(", ") || "ness
               } else if (toolFunctionName === "readWebPage") {
                 const textContent = await readWebPage(args.url || "");
                 toolContent = textContent;
+              } else if (toolFunctionName === "createOrUpdateArtifact") {
+                push("debug", `⚙️ Salvataggio artefatto: ${args.filename}...`);
+                const currentArtifacts = await getArtifacts();
+                const artId = args.id || "art-" + Date.now();
+                let target = currentArtifacts.find((a: any) => a.id === artId);
+                let logs: string[] = [];
+
+                if (args.type === "code") {
+                  const l = args.language.toLowerCase();
+                  if (l === "python" || l === "py") {
+                    logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione automatica script Python...`);
+                    const runOut = await executePython(args.code);
+                    logs.push(runOut);
+                  } else if (l === "javascript" || l === "typescript" || l === "js" || l === "ts") {
+                    logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione automatica script TypeScript...`);
+                    const runOut = await executeTypeScript(args.code);
+                    logs.push(runOut);
+                  }
+                }
+
+                if (target) {
+                  target.title = args.title || target.title;
+                  target.filename = args.filename || target.filename;
+                  target.code = args.code || target.code;
+                  target.language = args.language || target.language;
+                  target.type = args.type || target.type;
+                  if (logs.length > 0) target.logs = logs;
+                  target.updatedAt = new Date().toISOString();
+                  if (agentConfig?.id) {
+                    target.discussionId = agentConfig.id;
+                  }
+                } else {
+                  target = {
+                    id: artId,
+                    title: args.title,
+                    filename: args.filename,
+                    code: args.code,
+                    language: args.language,
+                    type: args.type,
+                    logs: logs,
+                    discussionId: agentConfig?.id || undefined,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString()
+                  };
+                  currentArtifacts.push(target);
+                }
+                await saveArtifacts(currentArtifacts);
+                toolContent = JSON.stringify({ success: true, artifact: target });
+
+              } else if (toolFunctionName === "runArtifact") {
+                push("debug", `⚙️ Esecuzione artefatto...`);
+                const currentArtifacts = await getArtifacts();
+                const target = currentArtifacts.find((a: any) => a.id === args.artifactId);
+                if (!target) {
+                  toolContent = JSON.stringify({ error: `Artefatto con ID ${args.artifactId} non trovato.` });
+                } else {
+                  let logs: string[] = [];
+                  const timestamp = new Date().toLocaleTimeString();
+                  logs.push(`> [${timestamp}] Esecuzione manuale di ${target.filename}...`);
+                  const l = target.language.toLowerCase();
+                  if (l === "python" || l === "py") {
+                    const runOut = await executePython(target.code);
+                    logs.push(runOut);
+                  } else if (l === "javascript" || l === "typescript" || l === "js" || l === "ts") {
+                    const runOut = await executeTypeScript(target.code);
+                    logs.push(runOut);
+                  } else {
+                    logs.push(`[System] Esecuzione non supportata per il linguaggio ${target.language}`);
+                  }
+                  logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione terminata.`);
+                  target.logs = logs;
+                  target.updatedAt = new Date().toISOString();
+                  await saveArtifacts(currentArtifacts);
+                  toolContent = JSON.stringify({ success: true, logs, artifact: target });
+                }
+
+              } else if (toolFunctionName === "getActiveArtifacts") {
+                push("debug", `⚙️ Recupero lista artefatti workspace...`);
+                let list = await getArtifacts();
+                if (agentConfig?.id) {
+                  list = list.filter(a => a.discussionId === agentConfig.id);
+                }
+                toolContent = JSON.stringify(list);
               } else {
                 toolContent = `Unknown function: ${toolFunctionName}`;
               }

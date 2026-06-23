@@ -8,18 +8,66 @@ import { DEFAULT_APP_SETTINGS } from '@/lib/settings';
 export default function SettingsPage() {
   const [settings, setSettings] = useState(DEFAULT_APP_SETTINGS);
   const [saved, setSaved] = useState(false);
+  const [tavilyConfigured, setTavilyConfigured] = useState(false);
+  const [tavilyKeyInput, setTavilyKeyInput] = useState('');
+  const [savingKey, setSavingKey] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('agentfoundry_settings');
     if (stored) {
       try { setSettings({ ...DEFAULT_APP_SETTINGS, ...JSON.parse(stored) }); } catch {}
     }
+
+    // Controlla se la chiave Tavily è configurata sul server
+    fetch('/api/demo/keys?name=tavily')
+      .then(res => res.json())
+      .then(data => {
+        if (data.configured) {
+          setTavilyConfigured(true);
+          setTavilyKeyInput('••••••••••••••••');
+        }
+      })
+      .catch(err => console.error("Errore caricamento stato Tavily:", err));
   }, []);
 
-  const saveSettings = () => {
+  const saveSettings = async () => {
     localStorage.setItem('agentfoundry_settings', JSON.stringify(settings));
+
+    if (tavilyKeyInput && tavilyKeyInput !== '••••••••••••••••') {
+      setSavingKey(true);
+      try {
+        const res = await fetch('/api/demo/keys', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'tavily', key: tavilyKeyInput }),
+        });
+        if (res.ok) {
+          setTavilyConfigured(true);
+          setTavilyKeyInput('••••••••••••••••');
+        }
+      } catch (err) {
+        console.error("Errore salvataggio API Key:", err);
+      } finally {
+        setSavingKey(false);
+      }
+    }
+
     setSaved(true);
     setTimeout(() => setSaved(false), 2500);
+  };
+
+  const removeTavilyKey = async () => {
+    try {
+      const res = await fetch('/api/demo/keys?name=tavily', {
+        method: 'DELETE',
+      });
+      if (res.ok) {
+        setTavilyConfigured(false);
+        setTavilyKeyInput('');
+      }
+    } catch (err) {
+      console.error("Errore rimozione API Key:", err);
+    }
   };
 
   const currentModel = AVAILABLE_MODELS.find(m => m.id === settings.defaultModel);
@@ -120,6 +168,74 @@ export default function SettingsPage() {
               style={{ background: '#F8F9FA', border: '1px solid #DADCE0', color: '#202124' }}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Ricerca Web (Tavily) */}
+      <div className="rounded-xl overflow-hidden" style={{ background: '#FFFFFF', border: '1px solid #E8EAED', boxShadow: '0 1px 2px rgba(60,64,67,0.10)' }}>
+        <div className="px-5 py-3.5 flex items-center gap-3" style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: '#E6F4EA' }}>
+            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4" style={{ color: '#137333' }}>
+              <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+            </svg>
+          </div>
+          <div>
+            <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>Ricerca Web (Tavily)</h2>
+            <p className="text-xs" style={{ color: '#5F6368' }}>Configura Tavily Search per abilitare le ricerche web in tempo reale più stabili ed evolute per gli agenti.</p>
+          </div>
+        </div>
+        <div className="p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <label className="block text-xs font-semibold" style={{ color: '#202124' }}>Abilita Tavily Search</label>
+              <p className="text-xs" style={{ color: '#5F6368' }}>Se disattivato, gli agenti useranno DuckDuckGo come fallback per le ricerche.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSettings(prev => ({ ...prev, useTavily: !prev.useTavily }))}
+              className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${settings.useTavily ? 'bg-[#1A73E8]' : 'bg-[#DADCE0]'}`}
+            >
+              <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${settings.useTavily ? 'translate-x-5' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          {settings.useTavily && (
+            <div className="space-y-3 pt-3 border-t border-[#F1F3F4] animate-fade-in">
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: '#5F6368' }}>Tavily API Key</label>
+                <div className="flex gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="password"
+                      value={tavilyKeyInput}
+                      onChange={e => setTavilyKeyInput(e.target.value)}
+                      placeholder="Inserisci la tua Tavily API Key"
+                      className="w-full px-3 py-2.5 rounded-lg text-sm focus:outline-none"
+                      style={{ background: '#F8F9FA', border: '1px solid #DADCE0', color: '#202124' }}
+                    />
+                    {tavilyConfigured && (
+                      <span className="absolute right-3 top-2.5 text-xs font-medium text-[#137333] flex items-center gap-1">
+                        Configurata ✅
+                      </span>
+                    )}
+                  </div>
+                  {tavilyConfigured && (
+                    <button
+                      type="button"
+                      onClick={removeTavilyKey}
+                      className="px-3 py-2.5 rounded-lg text-xs font-semibold transition-colors focus:outline-none"
+                      style={{ background: '#FCE8E6', color: '#C5221F', border: '1px solid #FAD2CF' }}
+                    >
+                      Rimuovi
+                    </button>
+                  )}
+                </div>
+                <p className="text-[10px] mt-1.5" style={{ color: '#5F6368' }}>
+                  La chiave viene memorizzata in modo sicuro crittografata sul server e non sarà mai esposta nel browser.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

@@ -101,7 +101,7 @@ function MemoryCard({ memory, onDelete }: { memory: MemoryItem; onDelete: (id: s
 function CategoryGroup({ categoryKey, memories, onDelete }: {
   categoryKey: string; memories: MemoryItem[]; onDelete: (id: string, agentId: string) => void;
 }) {
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(false);
   const cfg = CATEGORY_META[categoryKey] || CATEGORY_META.general;
   return (
     <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8EAED', background: '#FFFFFF' }}>
@@ -133,10 +133,148 @@ function CategoryGroup({ categoryKey, memories, onDelete }: {
 }
 
 // ── Main Page ────────────────────────────────────────────────────────
+function MemoryArtifactCard({ artifact, onDelete }: { artifact: any; onDelete: (id: string) => void }) {
+  const [activeTab, setActiveTab] = useState<'code' | 'logs' | 'preview'>('code');
+  const [terminalLogs, setTerminalLogs] = useState<string[]>(artifact.logs || []);
+  const [running, setRunning] = useState(false);
+
+  const hasLogs = terminalLogs.length > 0;
+  const isWeb = artifact.type === 'web' || artifact.filename.endsWith('.html') || artifact.filename.endsWith('.htm');
+
+  const handleRun = async () => {
+    setRunning(true);
+    setActiveTab('logs');
+    const timestamp = new Date().toLocaleTimeString();
+    setTerminalLogs(prev => [...prev, `> [${timestamp}] Esecuzione manuale...`]);
+    try {
+      const res = await fetch('/api/demo/artifacts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'run', id: artifact.id })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.logs) {
+          setTerminalLogs(data.logs);
+        }
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  return (
+    <div className="rounded-xl bg-white border border-[#E8EAED] overflow-hidden shadow-xs flex flex-col h-full">
+      {/* Header */}
+      <div className="px-4 py-3 bg-[#F8F9FA] border-b border-[#E8EAED] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">📦</span>
+          <div className="min-w-0">
+            <h3 className="font-semibold text-sm text-[#202124] truncate">{artifact.title}</h3>
+            <p className="text-[11px] text-[#5F6368] font-mono truncate">{artifact.filename}</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => onDelete(artifact.id)}
+          className="text-[#EA4335] hover:bg-[#FCE8E6] p-1.5 rounded-lg transition"
+          title="Elimina artefatto"
+        >
+          <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
+            <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Tabs list */}
+      <div className="flex border-b border-[#E8EAED] px-4 bg-[#F8F9FA] text-[11px] font-medium">
+        <button
+          type="button"
+          onClick={() => setActiveTab('code')}
+          className={`py-2 px-3 border-b-2 transition ${
+            activeTab === 'code' ? 'border-[#1A73E8] text-[#1A73E8]' : 'border-transparent text-[#5F6368] hover:text-[#202124]'
+          }`}
+        >
+          Codice
+        </button>
+        {hasLogs && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('logs')}
+            className={`py-2 px-3 border-b-2 transition ${
+              activeTab === 'logs' ? 'border-[#1A73E8] text-[#1A73E8]' : 'border-transparent text-[#5F6368] hover:text-[#202124]'
+            }`}
+          >
+            Logs
+          </button>
+        )}
+        {isWeb && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('preview')}
+            className={`py-2 px-3 border-b-2 transition ${
+              activeTab === 'preview' ? 'border-[#1A73E8] text-[#1A73E8]' : 'border-transparent text-[#5F6368] hover:text-[#202124]'
+            }`}
+          >
+            Anteprima
+          </button>
+        )}
+      </div>
+
+      {/* Main Content Area */}
+      <div className="p-4 flex-1 flex flex-col min-h-0 bg-[#FAFAFA] justify-between">
+        <div className="flex-1 min-h-0 mb-4">
+          {activeTab === 'code' && (
+            <pre className="overflow-auto font-mono text-[11px] leading-relaxed p-3 rounded-lg border border-[#E8EAED] bg-white h-48 text-[#202124] custom-scrollbar">
+              <code>{artifact.code}</code>
+            </pre>
+          )}
+          {activeTab === 'logs' && (
+            <div className="bg-black text-[#00E676] font-mono text-[11px] p-3 rounded-lg overflow-auto h-48 custom-scrollbar">
+              {terminalLogs.map((log, idx) => (
+                <div key={idx} className="whitespace-pre-wrap">{log}</div>
+              ))}
+            </div>
+          )}
+          {activeTab === 'preview' && (
+            <div className="bg-white rounded-lg border border-[#E8EAED] overflow-hidden h-48">
+              <iframe
+                srcDoc={artifact.code}
+                sandbox="allow-scripts allow-same-origin allow-modals"
+                className="w-full h-full border-0 bg-white"
+                title="Memory Web App Preview"
+              />
+            </div>
+          )}
+        </div>
+
+        {/* Footer actions */}
+        <div className="flex items-center justify-between border-t border-[#E8EAED] pt-3 text-[10px]">
+          <span className="text-[#9AA0AC]">
+            Creato il: {new Date(artifact.createdAt).toLocaleDateString('it-IT')}
+          </span>
+          {(artifact.language === 'python' || artifact.language === 'py' || artifact.language === 'typescript' || artifact.language === 'ts' || artifact.language === 'javascript' || artifact.language === 'js') && (
+            <button
+              type="button"
+              onClick={handleRun}
+              disabled={running}
+              className="px-3 py-1 bg-[#34A853] hover:bg-[#2C8C47] text-white font-semibold rounded-lg shadow-sm transition disabled:opacity-50"
+            >
+              {running ? 'Esecuzione...' : '▶ Esegui'}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MemoryPage() {
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
-  const [tab, setTab] = useState<"mnemosyne" | "mnemosyne-settings" | "patterns" | "playbooks" | "knowledge-settings">("mnemosyne");
+  const [tab, setTab] = useState<"mnemosyne" | "artifacts" | "mnemosyne-settings" | "patterns" | "playbooks" | "knowledge-settings">("mnemosyne");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState("all");
@@ -147,6 +285,10 @@ export default function MemoryPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [scopeFilter, setScopeFilter] = useState<'all' | 'local' | 'global'>('all');
   const [agentFilter, setAgentFilter] = useState<string>('all');
+
+  const [artifacts, setArtifacts] = useState<any[]>([]);
+  const [loadingArtifacts, setLoadingArtifacts] = useState(true);
+  const [artifactSearchQuery, setArtifactSearchQuery] = useState("");
 
   const [memSettings, setMemSettings] = useState(DEFAULT_APP_SETTINGS.memorySettings);
   const [kbSettings, setKbSettings] = useState(DEFAULT_APP_SETTINGS.knowledgeSettings);
@@ -191,6 +333,27 @@ export default function MemoryPage() {
     try {
       const res = await fetch(`/api/demo/mnemosyne?agentConfigId=${agentConfigId}&id=${id}`, { method: 'DELETE' });
       if (res.ok) setMemories(prev => prev.filter(m => m.id !== id));
+    } catch {}
+  };
+
+  const fetchArtifacts = async () => {
+    setLoadingArtifacts(true);
+    try {
+      const res = await fetch('/api/demo/artifacts');
+      if (res.ok) setArtifacts(await res.json());
+    } catch {}
+    finally { setLoadingArtifacts(false); }
+  };
+
+  useEffect(() => { 
+    if (tab === 'artifacts') fetchArtifacts(); 
+  }, [tab]);
+
+  const deleteArtifact = async (id: string) => {
+    if (!confirm("Eliminare questo artefatto permanentemente?")) return;
+    try {
+      const res = await fetch(`/api/demo/artifacts?id=${id}`, { method: 'DELETE' });
+      if (res.ok) setArtifacts(prev => prev.filter(a => a.id !== id));
     } catch {}
   };
 
@@ -247,6 +410,7 @@ export default function MemoryPage() {
 
   const TABS = [
     { id: "mnemosyne", label: "Ricordi", group: "memory" },
+    { id: "artifacts", label: "Artefatti", group: "memory" },
     { id: "mnemosyne-settings", label: "Impostazioni", group: "memory" },
     { id: "patterns", label: `Pattern (${patterns.length})`, group: "knowledge" },
     { id: "playbooks", label: `Playbook (${playbooks.length})`, group: "knowledge" },
@@ -297,6 +461,17 @@ export default function MemoryPage() {
 
         {/* Filters row */}
         <div className="px-4 py-3 flex flex-wrap items-center gap-3" style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
+          {tab === 'artifacts' && (
+            <div className="relative flex-1 max-w-xs">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 absolute left-2.5 top-2" style={{ color: '#9AA0AC' }}>
+                <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+              </svg>
+              <input type="text" placeholder="Cerca negli artefatti..." value={artifactSearchQuery}
+                onChange={e => setArtifactSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-1.5 rounded-lg text-sm focus:outline-none"
+                style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }} />
+            </div>
+          )}
           {tab === 'mnemosyne' && (
             <>
               <div className="relative flex-1 max-w-xs">
@@ -408,6 +583,39 @@ export default function MemoryPage() {
                 <CategoryGroup key={g.category} categoryKey={g.category} memories={g.items} onDelete={deleteMemory} />
               ))}
             </>
+          )}
+        </div>
+      )}
+
+      {/* ══ TAB: ARTIFACTS ══════════════════════════════════════════ */}
+      {tab === "artifacts" && (
+        <div className="space-y-4">
+          {loadingArtifacts ? (
+            <div className="flex justify-center py-16">
+              <div className="w-6 h-6 rounded-full border-2 border-[#1A73E8] border-t-transparent animate-spin" />
+            </div>
+          ) : artifacts.length === 0 ? (
+            <div className="text-center py-16 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
+              <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3" style={{ background: '#E8F0FE' }}>
+                <span className="text-2xl">📦</span>
+              </div>
+              <h3 className="font-semibold text-sm mb-1" style={{ color: '#202124' }}>Nessun artefatto salvato</h3>
+              <p className="text-sm" style={{ color: '#5F6368' }}>
+                Gli artefatti creati dal CoFounder o dagli agenti tramite codice compariranno qui.
+              </p>
+            </div>
+          ) : artifacts.filter(a => a.title.toLowerCase().includes(artifactSearchQuery.toLowerCase()) || a.filename.toLowerCase().includes(artifactSearchQuery.toLowerCase())).length === 0 ? (
+            <div className="text-center py-10 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
+              <p className="text-sm" style={{ color: '#5F6368' }}>Nessun artefatto corrisponde ai filtri.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
+              {artifacts
+                .filter(a => a.title.toLowerCase().includes(artifactSearchQuery.toLowerCase()) || a.filename.toLowerCase().includes(artifactSearchQuery.toLowerCase()))
+                .map(art => (
+                  <MemoryArtifactCard key={art.id} artifact={art} onDelete={deleteArtifact} />
+                ))}
+            </div>
           )}
         </div>
       )}

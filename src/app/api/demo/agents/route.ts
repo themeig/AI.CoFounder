@@ -126,12 +126,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing database configurations" }, { status: 500 });
     }
 
-    const { type, name } = await req.json();
+    const { type, name, settings } = await req.json();
     if (!type || !name) {
       return NextResponse.json({ error: "Missing type or name parameter" }, { status: 400 });
     }
 
     const startup = await getOrCreateStartup();
+
+    const mergedSettings = {
+      enabledTools: ["get_knowledge_pattern_details", "webSearch", "getStartupInfo", "getCustomMetrics", "readWebPage"],
+      ...(settings || {})
+    };
 
     // Create new agent config
     const newAgent = await supabaseFetch(`/AgentConfig`, {
@@ -141,7 +146,7 @@ export async function POST(req: Request) {
         type: type.toLowerCase(),
         name,
         isActive: true,
-        settings: { enabledTools: ["get_knowledge_pattern_details", "webSearch", "getStartupInfo", "getCustomMetrics", "readWebPage"] }
+        settings: mergedSettings
       }),
     });
 

@@ -1,0 +1,7 @@
+{
+  "tavily": {
+    "iv": "ddbac55d5284cff750e08e1c",
+    "encryptedData": "8984db60652e216bca8972e42c4625903c9f90952fb7d3b0aedd316ab859f42239f923b016169d504e8851d2d251213f180ea2602acd4bacbc",
+    "authTag": "83ac8df53a9c4389874124c4b06ec0a5"
+  }
+}

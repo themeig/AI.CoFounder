@@ -79,7 +79,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   // ── Sidebar collapse ─────────────────────────────────────────────
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [logoHovered, setLogoHovered] = useState(false);
+  const isExpanded = !sidebarCollapsed;
 
   useEffect(() => {
     const stored = localStorage.getItem("agentfoundry_global_sidebar");
@@ -141,48 +141,69 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen flex" style={{ background: "#F8F9FA" }}>
-      {/* ── Left Sidebar ─────────────────────────────────────────── */}
-      <aside
-        className="flex flex-col flex-shrink-0 h-screen sticky top-0 transition-all duration-200"
+      {/* ── Left Sidebar Wrapper (prevents layout shift) ─────────── */}
+      <div
+        className="flex-shrink-0 h-screen sticky top-0 transition-all duration-200"
         style={{
           width: sidebarCollapsed ? "52px" : "200px",
           minWidth: sidebarCollapsed ? "52px" : "200px",
-          background: "#FFFFFF",
-          borderRight: "1px solid #E8EAED",
-          boxShadow: "1px 0 0 #E8EAED",
-          position: "relative",
         }}
       >
-        {/* Logo and Collapse Button */}
-        <div 
-          className={`flex items-center justify-between ${sidebarCollapsed ? "justify-center px-2" : "px-4"}`} 
-          style={{ 
-            height: "56px", 
-            borderBottom: "1px solid #E8EAED",
-            flexShrink: 0
+        <aside
+          className="flex flex-col h-full transition-all duration-200 border-r border-[#E8EAED] z-50 bg-white"
+          style={{
+            position: sidebarCollapsed ? "absolute" : "relative",
+            width: isExpanded ? "200px" : "52px",
+            boxShadow: "1px 0 0 #E8EAED",
           }}
         >
-          {!sidebarCollapsed ? (
-            <>
-              <div className="flex items-center gap-2.5 min-w-0">
-                <div
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
-                  style={{ background: "linear-gradient(135deg, #1A73E8, #34A853)" }}
+          {/* Logo and Collapse Button */}
+          <div 
+            className={`flex items-center relative overflow-hidden ${isExpanded ? "px-3.5 justify-between" : "px-2 justify-center"}`}
+            style={{ 
+              height: "56px", 
+              borderBottom: "1px solid #E8EAED",
+              flexShrink: 0
+            }}
+          >
+            {/* Logo text & Icon wrapper */}
+            <div className={`flex items-center min-w-0 ${isExpanded ? "gap-2.5 flex-1" : "justify-center"}`}>
+              {!isExpanded ? (
+                <button
+                  onClick={toggleSidebar}
+                  className="w-8 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0 hover:bg-[#E8EAED] text-[#5F6368] hover:text-[#1A73E8]"
+                  style={{ background: "#F1F3F4" }}
+                  title="Espandi menu"
                 >
-                  AI
-                </div>
-                <div className="truncate">
-                  <div className="font-semibold text-sm leading-tight truncate" style={{ color: "#202124" }}>
-                    AI.CoFounder
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+                    <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/>
+                  </svg>
+                </button>
+              ) : (
+                <>
+                  <div
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm flex-shrink-0"
+                    style={{ background: "linear-gradient(135deg, #1A73E8, #34A853)" }}
+                  >
+                    AI
                   </div>
-                  <div className="text-[10px] leading-tight truncate" style={{ color: "#9AA0AC" }}>
-                    Workspace
+                  <div className="transition-all duration-200 overflow-hidden whitespace-nowrap">
+                    <div className="font-semibold text-sm leading-tight truncate" style={{ color: "#202124" }}>
+                      AI.CoFounder
+                    </div>
+                    <div className="text-[10px] leading-tight truncate" style={{ color: "#9AA0AC" }}>
+                      Workspace
+                    </div>
                   </div>
-                </div>
-              </div>
+                </>
+              )}
+            </div>
+
+            {/* Collapse button */}
+            {isExpanded && (
               <button
                 onClick={toggleSidebar}
-                className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors flex-shrink-0"
+                className="w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 hover:bg-[#E8EAED]"
                 style={{ background: "#F1F3F4", color: "#5F6368" }}
                 title="Comprimi menu"
               >
@@ -190,93 +211,84 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
                 </svg>
               </button>
-            </>
-          ) : (
-            <button
-              onClick={toggleSidebar}
-              onMouseEnter={() => setLogoHovered(true)}
-              onMouseLeave={() => setLogoHovered(false)}
-              className="w-8 h-8 rounded-lg flex items-center justify-center font-bold text-sm transition-all"
-              style={{
-                background: logoHovered ? "#F1F3F4" : "linear-gradient(135deg, #1A73E8, #34A853)",
-                color: logoHovered ? "#5F6368" : "#FFFFFF"
-              }}
-              title="Espandi menu"
-            >
-              {logoHovered ? (
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                  <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/>
-                </svg>
-              ) : (
-                "AI"
-              )}
-            </button>
-          )}
-        </div>
+            )}
+          </div>
 
-        {/* Navigation */}
-        <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto custom-scrollbar">
-          {navItems.map((item) => {
-            const isActive = pathname.startsWith(item.href) && (item.href !== "/dashboard" || pathname === "/dashboard");
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center rounded-lg transition-colors group ${
-                  sidebarCollapsed ? "justify-center px-0 py-2.5" : "gap-3 px-3 py-2.5"
-                }`}
+          {/* Navigation */}
+          <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto custom-scrollbar">
+            {navItems.map((item) => {
+              const isActive = pathname.startsWith(item.href) && (item.href !== "/dashboard" || pathname === "/dashboard");
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className="flex items-center rounded-lg transition-colors group px-3.5 py-2.5 gap-4 relative overflow-hidden"
+                  style={{
+                    background: isActive ? "#E8F0FE" : "transparent",
+                    color: isActive ? "#1A73E8" : "#5F6368",
+                    fontWeight: isActive ? 600 : 500,
+                    fontSize: "0.875rem",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = "#F1F3F4";
+                      e.currentTarget.style.color = "#202124";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) {
+                      e.currentTarget.style.background = "transparent";
+                      e.currentTarget.style.color = "#5F6368";
+                    }
+                  }}
+                >
+                  <span
+                    style={{
+                      color: isActive ? "#1A73E8" : "#5F6368",
+                      transition: "color 0.15s",
+                    }}
+                    className="flex-shrink-0 w-5 h-5 flex items-center justify-center"
+                  >
+                    {item.icon}
+                  </span>
+                  <span
+                    className="transition-all duration-200 whitespace-nowrap overflow-hidden"
+                    style={{
+                      opacity: isExpanded ? 1 : 0,
+                      width: isExpanded ? "auto" : "0px",
+                      transform: isExpanded ? "translateX(0)" : "translateX(-10px)",
+                    }}
+                  >
+                    {item.label}
+                  </span>
+                  {isExpanded && isActive && (
+                    <div
+                      className="ml-auto w-1.5 h-1.5 rounded-full flex-shrink-0"
+                      style={{ background: "#1A73E8" }}
+                    />
+                  )}
+                </Link>
+              );
+            })}
+          </nav>
+
+          {/* Footer */}
+          <div className="py-3 px-3" style={{ borderTop: "1px solid #E8EAED" }}>
+            {/* User profile */}
+            <div className="flex items-center rounded-lg mb-1 px-3.5 py-2.5 gap-2.5" style={{ background: "#F8F9FA" }}>
+              <div
+                className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 text-white"
+                style={{ background: "#1A73E8" }}
+              >
+                D
+              </div>
+              <div 
+                className="flex-1 min-w-0 transition-all duration-200 overflow-hidden whitespace-nowrap"
                 style={{
-                  background: isActive ? "#E8F0FE" : "transparent",
-                  color: isActive ? "#1A73E8" : "#5F6368",
-                  fontWeight: isActive ? 600 : 500,
-                  fontSize: "0.875rem",
-                }}
-                onMouseEnter={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.background = "#F1F3F4";
-                    e.currentTarget.style.color = "#202124";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!isActive) {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "#5F6368";
-                  }
+                  opacity: isExpanded ? 1 : 0,
+                  width: isExpanded ? "auto" : "0px",
                 }}
               >
-                <span
-                  style={{
-                    color: isActive ? "#1A73E8" : "#5F6368",
-                    transition: "color 0.15s",
-                  }}
-                  className="flex-shrink-0"
-                >
-                  {item.icon}
-                </span>
-                {!sidebarCollapsed && <span>{item.label}</span>}
-                {!sidebarCollapsed && isActive && (
-                  <div
-                    className="ml-auto w-1.5 h-1.5 rounded-full"
-                    style={{ background: "#1A73E8" }}
-                  />
-                )}
-              </Link>
-            );
-          })}
-        </nav>
-
-        {/* Footer */}
-        <div className={`py-3 ${sidebarCollapsed ? "flex flex-col items-center gap-1.5 px-1.5" : "px-3"}`} style={{ borderTop: "1px solid #E8EAED" }}>
-          {/* User profile */}
-          <div className={`flex items-center rounded-lg mb-1 ${sidebarCollapsed ? "justify-center p-1.5" : "gap-2.5 px-2 py-2"}`} style={{ background: "#F8F9FA" }}>
-            <div
-              className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 text-white"
-              style={{ background: "#1A73E8" }}
-            >
-              D
-            </div>
-            {!sidebarCollapsed && (
-              <div className="flex-1 min-w-0">
                 <p className="text-xs font-semibold truncate" style={{ color: "#202124" }}>
                   {demoUser.name}
                 </p>
@@ -284,30 +296,38 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   {demoUser.email}
                 </p>
               </div>
-            )}
-          </div>
+            </div>
 
-          <button
-            onClick={() => {
-              document.cookie = "demo_user_id=; max-age=0; path=/";
-              document.cookie = "demo_mode=; max-age=0; path=/";
-              window.location.href = "/login";
-            }}
-            className={`w-full flex items-center rounded-lg text-xs font-medium transition-colors ${
-              sidebarCollapsed ? "justify-center p-2" : "gap-2 px-3 py-2"
-            }`}
-            style={{ color: "#EA4335" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "#FCE8E6")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-            title={sidebarCollapsed ? "Esci" : ""}
-          >
-            <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 flex-shrink-0">
-              <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-            </svg>
-            {!sidebarCollapsed && <span>Esci</span>}
-          </button>
-        </div>
-      </aside>
+            <button
+              onClick={() => {
+                document.cookie = "demo_user_id=; max-age=0; path=/";
+                document.cookie = "demo_mode=; max-age=0; path=/";
+                window.location.href = "/login";
+              }}
+              className="w-full flex items-center rounded-lg text-xs font-medium transition-colors px-3.5 py-2.5 gap-3"
+              style={{ color: "#EA4335" }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = "#FCE8E6")}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              title={!isExpanded ? "Esci" : ""}
+            >
+              <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                  <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                </svg>
+              </span>
+              <span
+                className="transition-all duration-200 whitespace-nowrap overflow-hidden"
+                style={{
+                  opacity: isExpanded ? 1 : 0,
+                  width: isExpanded ? "auto" : "0px",
+                }}
+              >
+                Esci
+              </span>
+            </button>
+          </div>
+        </aside>
+      </div>
 
       {/* ── Main Content ──────────────────────────────────────────── */}
       <main className="flex-1 overflow-y-auto h-screen custom-scrollbar" style={{ background: "#F8F9FA" }}>
