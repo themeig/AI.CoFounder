@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
 import { generateEmbedding } from "@/lib/embeddings";
 
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -17,11 +16,8 @@ export async function POST() {
       return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
     }
 
-    console.log("[Vector Backfill] 1. Enabling pgvector extension...");
-    await db.$executeRawUnsafe("CREATE EXTENSION IF NOT EXISTS vector;");
-
-    // --- 2. Backfill Patterns ---
-    console.log("[Vector Backfill] 2. Fetching existing patterns...");
+    // --- 1. Backfill Patterns ---
+    console.log("[Vector Backfill] 1. Fetching existing patterns...");
     const patternsRes = await fetch(`${SUPABASE_URL}/rest/v1/Pattern?select=*`, { headers });
     if (!patternsRes.ok) {
       throw new Error(`Failed to fetch patterns: ${patternsRes.statusText}`);
@@ -54,8 +50,8 @@ export async function POST() {
       }
     }
 
-    // --- 3. Backfill Mnemosyne Memories ---
-    console.log("[Vector Backfill] 3. Fetching agent configurations...");
+    // --- 2. Backfill Mnemosyne Memories ---
+    console.log("[Vector Backfill] 2. Fetching agent configurations...");
     const configRes = await fetch(`${SUPABASE_URL}/rest/v1/AgentConfig?select=*`, { headers });
     if (!configRes.ok) {
       throw new Error(`Failed to fetch agent configs: ${configRes.statusText}`);
@@ -63,17 +59,14 @@ export async function POST() {
     const configs = await configRes.json();
     let memoriesCount = 0;
 
-    // Clean existing VectorMemory table to prevent duplicates
-    console.log("[Vector Backfill] Cleaning existing VectorMemory table...");
-    try {
-      await db.$executeRawUnsafe('TRUNCATE TABLE "VectorMemory" CASCADE;');
-    } catch (cleanErr: any) {
-      console.warn("[Vector Backfill] Direct truncate failed, attempting via HTTP DELETE...", cleanErr.message);
-      // Fallback HTTP delete
-      await fetch(`${SUPABASE_URL}/rest/v1/VectorMemory?id=not.is.null`, {
-        method: "DELETE",
-        headers,
-      });
+    // Clean existing VectorMemory table to prevent duplicates via HTTP DELETE
+    console.log("[Vector Backfill] Cleaning existing VectorMemory table via HTTP DELETE...");
+    const deleteRes = await fetch(`${SUPABASE_URL}/rest/v1/VectorMemory?id=not.is.null`, {
+      method: "DELETE",
+      headers,
+    });
+    if (!deleteRes.ok) {
+      console.warn("[Vector Backfill] Warning: Failed to clean VectorMemory table:", await deleteRes.text());
     }
 
     console.log("[Vector Backfill] Rebuilding VectorMemory from agent settings JSONB...");
