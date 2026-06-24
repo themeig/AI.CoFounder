@@ -271,14 +271,292 @@ function MemoryArtifactCard({ artifact, onDelete }: { artifact: any; onDelete: (
   );
 }
 
+const SECTION_META: Record<string, { label: string; icon: string; color: string; bg: string; border: string }> = {
+  growth: { label: "Growth & Acquisizione", icon: "📈", color: "#1A73E8", bg: "#E8F0FE", border: "#C5D9F9" },
+  tech: { label: "Tecnologia & Infrastruttura", icon: "💻", color: "#17A2B8", bg: "#E0F7FA", border: "#B2EBF2" },
+  finance: { label: "Finanza & Fundraising", icon: "💰", color: "#34A853", bg: "#E6F4EA", border: "#CEEAD6" },
+  operations: { label: "Organizzazione & Team", icon: "⚙️", color: "#9334E6", bg: "#F3E8FF", border: "#E9D5FF" },
+};
+
+function getPatternSection(p: Pattern): 'growth' | 'tech' | 'finance' | 'operations' {
+  const sector = p.sector?.toLowerCase() || '';
+  const title = p.title.toLowerCase();
+  const desc = p.description.toLowerCase();
+
+  // Finance rules
+  if (
+    sector === 'finance' ||
+    sector === 'fintech' ||
+    title.includes('fundraising') ||
+    title.includes('valutazione') ||
+    title.includes('budget') ||
+    title.includes('investitor') ||
+    title.includes('investimenti') ||
+    desc.includes('fundraising') ||
+    desc.includes('cassa') ||
+    desc.includes('runway') ||
+    desc.includes('capit')
+  ) {
+    return 'finance';
+  }
+
+  // Tech & Product rules
+  if (
+    sector === 'tech' ||
+    sector === 'ai' ||
+    title.includes('architettura') ||
+    title.includes('debito tecnico') ||
+    title.includes('monolito') ||
+    title.includes('codice') ||
+    title.includes('sviluppo') ||
+    title.includes('engineering') ||
+    desc.includes('software') ||
+    desc.includes('cloud') ||
+    desc.includes('tecnic')
+  ) {
+    return 'tech';
+  }
+
+  // Operations & Team rules
+  if (
+    sector === 'operations' ||
+    title.includes('team') ||
+    title.includes('vesting') ||
+    title.includes('equity') ||
+    title.includes('hiring') ||
+    title.includes('assunzion') ||
+    desc.includes('dipendenti') ||
+    desc.includes('risorse umane')
+  ) {
+    return 'operations';
+  }
+
+  // Default / Growth & Market (saas, ecommerce, marketing, social, etc.)
+  return 'growth';
+}
+
+function PatternCard({ p }: { p: Pattern }) {
+  const isFailure = p.successRate < 0.4;
+  const rateColor = isFailure ? '#EA4335' : p.successRate >= 0.75 ? '#34A853' : '#F9AB00';
+  const rateBg = isFailure ? '#FCE8E6' : p.successRate >= 0.75 ? '#E6F4EA' : '#FEF7E0';
+  const rateLabel = isFailure ? 'Alto Rischio' : p.successRate >= 0.75 ? 'Ottimale' : 'Moderato';
+
+  return (
+    <div className="rounded-xl overflow-hidden bg-white" style={{
+      border: `1px solid ${isFailure ? '#F7CECE' : '#E8EAED'}`,
+      boxShadow: '0 1px 2px rgba(60,64,67,0.10)',
+      borderLeft: `4px solid ${rateColor}`,
+    }}>
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-4 mb-3">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 flex-wrap mb-2">
+              {isFailure && <span className="chip chip-red">Anti-Pattern</span>}
+              {p.extractedBy === 'hermes_analyzer' && !isFailure && <span className="chip chip-blue">AI Learned</span>}
+              {p.sector && <span className="chip chip-gray">{p.sector.toUpperCase()}</span>}
+              {p.phase && <span className="chip chip-gray">{p.phase.toUpperCase()}</span>}
+              {p.avgTimeToOutcome && <span className="chip chip-gray">⏱ {p.avgTimeToOutcome}</span>}
+            </div>
+            <h3 className="font-semibold text-base text-left" style={{ color: '#202124' }}>{p.title}</h3>
+          </div>
+          {/* Success rate badge */}
+          <div className="flex-shrink-0 px-4 py-2 rounded-xl text-center" style={{ background: rateBg }}>
+            <div className="text-xl font-bold tabular-nums" style={{ color: rateColor }}>{(p.successRate * 100).toFixed(0)}%</div>
+            <div className="text-[10px] font-semibold" style={{ color: rateColor }}>{rateLabel}</div>
+            <div className="text-[9px] mt-0.5" style={{ color: '#9AA0AC' }}>{p.sampleSize} casi · {(p.confidence * 100).toFixed(0)}% conf.</div>
+          </div>
+        </div>
+
+        <p className="text-sm leading-relaxed mb-4 text-left" style={{ color: '#5F6368' }}>{p.description}</p>
+
+        {/* Progress bar for success rate */}
+        <div className="flex items-center gap-3 mb-4">
+          <div className="flex-1 h-1.5 rounded-full" style={{ background: '#F1F3F4' }}>
+            <div className="h-full rounded-full transition-all" style={{ width: `${p.successRate * 100}%`, background: rateColor }} />
+          </div>
+          <span className="text-xs tabular-nums" style={{ color: '#9AA0AC', width: '32px', textAlign: 'right' }}>{(p.successRate * 100).toFixed(0)}%</span>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-4 text-left">
+          {p.keyFactors?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: '#34A853' }}>
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+                Fattori di Successo
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {p.keyFactors.map((f, i) => <span key={i} className="chip chip-green">{f}</span>)}
+              </div>
+            </div>
+          )}
+          {p.failureModes?.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: '#EA4335' }}>
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                Errori Comuni
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {p.failureModes.map((m, i) => <span key={i} className="chip chip-red">{m}</span>)}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const STORY_SECTOR_META: Record<string, { label: string; icon: string; color: string; bg: string; border: string }> = {
+  saas: { label: "SaaS & Enterprise Software", icon: "☁️", color: "#1A73E8", bg: "#E8F0FE", border: "#C5D9F9" },
+  fintech: { label: "Fintech & Pagamenti", icon: "💳", color: "#34A853", bg: "#E6F4EA", border: "#CEEAD6" },
+  ecommerce: { label: "E-commerce & D2C", icon: "🛒", color: "#F9AB00", bg: "#FEF7E0", border: "#FDE293" },
+  marketplaces: { label: "Marketplaces & Network", icon: "🤝", color: "#FF6D00", bg: "#FFF3E0", border: "#FFE0B2" },
+  ai: { label: "AI & Deeptech", icon: "🧠", color: "#17A2B8", bg: "#E0F7FA", border: "#B2EBF2" },
+  social: { label: "Social & Consumer Tech", icon: "📱", color: "#EA4335", bg: "#FCE8E6", border: "#F7CECE" },
+  health: { label: "Health & Biotech", icon: "🏥", color: "#00897B", bg: "#E0F2F1", border: "#B2DFDB" },
+  general: { label: "Generale / Altro", icon: "🏢", color: "#5F6368", bg: "#F1F3F4", border: "#E8EAED" },
+};
+
+function StoryCard({ story }: { story: any }) {
+  const isSuccess = story.status === "success";
+  const badgeColor = isSuccess ? "#34A853" : "#EA4335";
+  const badgeBg = isSuccess ? "#E6F4EA" : "#FCE8E6";
+  const badgeLabel = isSuccess ? "Successo" : "Fallimento";
+
+  return (
+    <div className="rounded-xl overflow-hidden bg-white flex flex-col justify-between" style={{
+      border: `1px solid ${isSuccess ? '#CEEAD6' : '#F7CECE'}`,
+      boxShadow: '0 1px 2px rgba(60,64,67,0.10)',
+      borderLeft: `4px solid ${badgeColor}`,
+    }}>
+      <div className="p-5 flex flex-col h-full justify-between">
+        <div>
+          <div className="flex items-start justify-between gap-4 mb-3">
+            <h3 className="font-bold text-base text-left text-[#202124]">{story.title}</h3>
+            <span className="px-3 py-1 rounded-full text-xs font-bold flex-shrink-0" style={{ background: badgeBg, color: badgeColor }}>
+              {badgeLabel}
+            </span>
+          </div>
+          <p className="text-sm leading-relaxed mb-4 text-left text-[#5F6368] whitespace-pre-wrap">{story.description}</p>
+        </div>
+        
+        {story.takeaway && (
+          <div className="mt-2 p-3.5 rounded-lg border text-left" style={{ background: '#F8F9FA', borderColor: '#E8EAED' }}>
+            <p className="text-xs font-bold uppercase tracking-wider mb-1" style={{ color: '#5F6368' }}>💡 Takeaway Chiave</p>
+            <p className="text-sm leading-relaxed" style={{ color: '#202124' }}>{story.takeaway}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StorySectionGroup({ sectionKey, stories, isOpen, onToggle }: {
+  sectionKey: string; stories: any[]; isOpen: boolean; onToggle: () => void;
+}) {
+  const cfg = STORY_SECTOR_META[sectionKey] || STORY_SECTOR_META.general;
+  const successCount = stories.filter(s => s.status === "success").length;
+  const failureCount = stories.filter(s => s.status === "failure").length;
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8EAED', background: '#FFFFFF' }}>
+      <button type="button" onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3.5 transition-colors"
+        style={{ background: '#F8F9FA' }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#F1F3F4')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#F8F9FA')}>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base" style={{ background: cfg.bg }}>
+            {cfg.icon}
+          </div>
+          <div className="text-left">
+            <div className="text-sm font-semibold" style={{ color: '#202124' }}>{cfg.label}</div>
+            <div className="text-xs flex items-center gap-1.5" style={{ color: '#5F6368' }}>
+              <span>{stories.length} {stories.length === 1 ? 'storia' : 'storie'}</span>
+              {stories.length > 0 && (
+                <>
+                  <span style={{ color: '#DADCE0' }}>|</span>
+                  {successCount > 0 && <span style={{ color: '#34A853', fontWeight: 500 }}>{successCount} successi</span>}
+                  {successCount > 0 && failureCount > 0 && <span>·</span>}
+                  {failureCount > 0 && <span style={{ color: '#EA4335', fontWeight: 500 }}>{failureCount} fallimenti</span>}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 transition-transform" style={{ color: '#5F6368', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          <path d="M7 10l5 5 5-5z"/>
+        </svg>
+      </button>
+      {isOpen && (
+        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#FAFAFA]" style={{ borderTop: '1px solid #E8EAED' }}>
+          {stories.map(s => <StoryCard key={s.id} story={s} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PatternSectionGroup({ sectionKey, patterns, isOpen, onToggle }: {
+  sectionKey: string; patterns: Pattern[]; isOpen: boolean; onToggle: () => void;
+}) {
+  const cfg = SECTION_META[sectionKey] || { label: "Altro", icon: "📌", color: "#5F6368", bg: "#F1F3F4", border: "#E8EAED" };
+  const optimalCount = patterns.filter(p => p.successRate >= 0.75).length;
+  const riskCount = patterns.filter(p => p.successRate < 0.4).length;
+
+  return (
+    <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8EAED', background: '#FFFFFF' }}>
+      <button type="button" onClick={onToggle}
+        className="w-full flex items-center justify-between px-4 py-3.5 transition-colors"
+        style={{ background: '#F8F9FA' }}
+        onMouseEnter={e => (e.currentTarget.style.background = '#F1F3F4')}
+        onMouseLeave={e => (e.currentTarget.style.background = '#F8F9FA')}>
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center text-base" style={{ background: cfg.bg }}>
+            {cfg.icon}
+          </div>
+          <div className="text-left">
+            <div className="text-sm font-semibold" style={{ color: '#202124' }}>{cfg.label}</div>
+            <div className="text-xs flex items-center gap-1.5" style={{ color: '#5F6368' }}>
+              <span>{patterns.length} pattern</span>
+              {patterns.length > 0 && (
+                <>
+                  <span style={{ color: '#DADCE0' }}>|</span>
+                  {optimalCount > 0 && <span style={{ color: '#34A853', fontWeight: 500 }}>{optimalCount} ottimali</span>}
+                  {optimalCount > 0 && riskCount > 0 && <span>·</span>}
+                  {riskCount > 0 && <span style={{ color: '#EA4335', fontWeight: 500 }}>{riskCount} rischio</span>}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+        <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 transition-transform" style={{ color: '#5F6368', transform: isOpen ? 'rotate(180deg)' : 'rotate(0deg)' }}>
+          <path d="M7 10l5 5 5-5z"/>
+        </svg>
+      </button>
+      {isOpen && (
+        <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-[#FAFAFA]" style={{ borderTop: '1px solid #E8EAED' }}>
+          {patterns.map(p => <PatternCard key={p.id} p={p} />)}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function MemoryPage() {
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
-  const [tab, setTab] = useState<"mnemosyne" | "artifacts" | "mnemosyne-settings" | "patterns" | "playbooks" | "knowledge-settings">("mnemosyne");
+  const [stories, setStories] = useState<any[]>([]);
+  const [tab, setTab] = useState<"mnemosyne" | "artifacts" | "mnemosyne-settings" | "patterns" | "playbooks" | "knowledge-settings" | "stories">("mnemosyne");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [sectorFilter, setSectorFilter] = useState("all");
   const [phaseFilter, setPhaseFilter] = useState("all");
+
+  const [storiesSearch, setStoriesSearch] = useState("");
+  const [storiesSectorFilter, setStoriesSectorFilter] = useState("all");
+  const [storiesStatusFilter, setStoriesStatusFilter] = useState("all");
+  const [loadingStories, setLoadingStories] = useState(false);
 
   const [memories, setMemories] = useState<MemoryItem[]>([]);
   const [loadingMemories, setLoadingMemories] = useState(true);
@@ -293,6 +571,24 @@ export default function MemoryPage() {
   const [memSettings, setMemSettings] = useState(DEFAULT_APP_SETTINGS.memorySettings);
   const [kbSettings, setKbSettings] = useState(DEFAULT_APP_SETTINGS.knowledgeSettings);
   const [settingsSaved, setSettingsSaved] = useState(false);
+
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
+    growth: false,
+    tech: false,
+    finance: false,
+    operations: false,
+  });
+
+  const [expandedStoriesSections, setExpandedStoriesSections] = useState<Record<string, boolean>>({
+    saas: false,
+    fintech: false,
+    ecommerce: false,
+    marketplaces: false,
+    ai: false,
+    social: false,
+    health: false,
+    general: false,
+  });
 
   useEffect(() => {
     const stored = localStorage.getItem('agentfoundry_settings');
@@ -357,13 +653,40 @@ export default function MemoryPage() {
     } catch {}
   };
 
+  const fetchStories = async () => {
+    setLoadingStories(true);
+    try {
+      const q = new URLSearchParams();
+      if (storiesSearch.trim()) q.set("search", storiesSearch);
+      if (storiesSectorFilter !== "all") q.set("sector", storiesSectorFilter);
+      if (storiesStatusFilter !== "all") q.set("status", storiesStatusFilter);
+      const res = await fetch(`/api/memory/stories?${q.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setStories(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Error fetching stories:", err);
+    } finally {
+      setLoadingStories(false);
+    }
+  };
+
+  useEffect(() => {
+    if (tab === "stories") {
+      fetchStories();
+    }
+  }, [tab, storiesSearch, storiesSectorFilter, storiesStatusFilter]);
+
   useEffect(() => {
     Promise.all([
       fetch("/api/memory/patterns").then(r => r.json()),
       fetch("/api/memory/playbooks").then(r => r.json()),
-    ]).then(([p, pb]) => {
+      fetch("/api/memory/stories").then(r => r.json()),
+    ]).then(([p, pb, s]) => {
       setPatterns(Array.isArray(p) ? p : []);
       setPlaybooks(Array.isArray(pb) ? pb : []);
+      setStories(Array.isArray(s) ? s : []);
       setLoading(false);
     }).catch(() => setLoading(false));
   }, []);
@@ -382,6 +705,53 @@ export default function MemoryPage() {
     const matchesPhase = phaseFilter === "all" || pb.phase?.toLowerCase() === phaseFilter;
     return matchesSearch && matchesSector && matchesPhase;
   });
+
+  const groupedPatterns = useMemo(() => {
+    const groups: Record<string, Pattern[]> = {
+      growth: [],
+      tech: [],
+      finance: [],
+      operations: [],
+    };
+    for (const p of filteredPatterns) {
+      const sec = getPatternSection(p);
+      groups[sec].push(p);
+    }
+    for (const key of Object.keys(groups)) {
+      groups[key].sort((a, b) => b.successRate - a.successRate);
+    }
+    return groups;
+  }, [filteredPatterns]);
+
+  const groupedStories = useMemo(() => {
+    const groups: Record<string, any[]> = {
+      saas: [],
+      fintech: [],
+      ecommerce: [],
+      marketplaces: [],
+      ai: [],
+      social: [],
+      health: [],
+      general: [],
+    };
+    for (const s of stories) {
+      const sec = s.sector || "general";
+      if (groups[sec]) {
+        groups[sec].push(s);
+      } else {
+        groups.general.push(s);
+      }
+    }
+    for (const key of Object.keys(groups)) {
+      groups[key].sort((a, b) => {
+        if (a.status !== b.status) {
+          return a.status === "success" ? -1 : 1;
+        }
+        return a.title.localeCompare(b.title);
+      });
+    }
+    return groups;
+  }, [stories]);
 
   const groupedMemories = useMemo(() => {
     const filtered = memories.filter(m => {
@@ -414,6 +784,7 @@ export default function MemoryPage() {
     { id: "mnemosyne-settings", label: "Impostazioni", group: "memory" },
     { id: "patterns", label: `Pattern (${patterns.length})`, group: "knowledge" },
     { id: "playbooks", label: `Playbook (${playbooks.length})`, group: "knowledge" },
+    { id: "stories", label: `Storie (${stories.length})`, group: "knowledge" },
     { id: "knowledge-settings", label: "Impostazioni", group: "knowledge" },
   ] as const;
 
@@ -539,6 +910,39 @@ export default function MemoryPage() {
                 <option value="pre-seed">Pre-Seed</option>
                 <option value="mvp">MVP</option>
                 <option value="growth">Growth</option>
+              </select>
+            </>
+          )}
+          {tab === 'stories' && (
+            <>
+              <div className="relative flex-1 max-w-xs">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 absolute left-2.5 top-2" style={{ color: '#9AA0AC' }}>
+                  <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+                </svg>
+                <input type="text" placeholder="Cerca nelle storie..." value={storiesSearch}
+                  onChange={e => setStoriesSearch(e.target.value)}
+                  className="w-full pl-8 pr-3 py-1.5 rounded-lg text-sm focus:outline-none"
+                  style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }} />
+              </div>
+              <select value={storiesSectorFilter} onChange={e => setStoriesSectorFilter(e.target.value)}
+                className="px-2.5 py-1.5 rounded-lg text-sm focus:outline-none"
+                style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}>
+                <option value="all">Tutti i settori</option>
+                <option value="saas">SaaS</option>
+                <option value="fintech">Fintech</option>
+                <option value="ecommerce">E-commerce</option>
+                <option value="marketplaces">Marketplaces</option>
+                <option value="ai">AI</option>
+                <option value="social">Social</option>
+                <option value="health">Health</option>
+                <option value="general">Generale</option>
+              </select>
+              <select value={storiesStatusFilter} onChange={e => setStoriesStatusFilter(e.target.value)}
+                className="px-2.5 py-1.5 rounded-lg text-sm focus:outline-none"
+                style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}>
+                <option value="all">Tutti gli outcome</option>
+                <option value="success">Successo</option>
+                <option value="failure">Fallimento</option>
               </select>
             </>
           )}
@@ -719,7 +1123,7 @@ export default function MemoryPage() {
       {tab === "patterns" && (
         <div className="space-y-4">
           {/* Stats bar */}
-          <div className="flex flex-wrap items-center gap-4 px-4 py-3 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
+          <div className="flex flex-wrap items-center gap-4 px-4 py-3 rounded-xl animate-fade-in" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
             <div className="flex items-center gap-1.5 text-sm">
               <span className="font-semibold" style={{ color: '#202124' }}>{filteredPatterns.length}</span>
               <span style={{ color: '#5F6368' }}>pattern</span>
@@ -730,7 +1134,24 @@ export default function MemoryPage() {
               <span className="chip chip-red">{filteredPatterns.filter(p => p.successRate < 0.4).length} anti-pattern</span>
             </div>
             <div className="flex-1" />
-            <span className="text-xs italic" style={{ color: '#9AA0AC' }}>Fonti: Y Combinator · Sequoia · First Round Capital · Paul Graham</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setExpandedSections({ growth: true, tech: true, finance: true, operations: true })}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#F1F3F4] transition-colors border"
+                style={{ color: '#1A73E8', borderColor: '#DADCE0', background: '#FFFFFF' }}
+              >
+                Espandi tutti
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpandedSections({ growth: false, tech: false, finance: false, operations: false })}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#F1F3F4] transition-colors border"
+                style={{ color: '#5F6368', borderColor: '#DADCE0', background: '#FFFFFF' }}
+              >
+                Comprimi tutti
+              </button>
+            </div>
           </div>
 
           {filteredPatterns.length === 0 && (
@@ -739,77 +1160,78 @@ export default function MemoryPage() {
             </div>
           )}
 
-          {filteredPatterns.map(p => {
-            const isFailure = p.successRate < 0.4;
-            const rateColor = isFailure ? '#EA4335' : p.successRate >= 0.75 ? '#34A853' : '#F9AB00';
-            const rateBg = isFailure ? '#FCE8E6' : p.successRate >= 0.75 ? '#E6F4EA' : '#FEF7E0';
-            const rateLabel = isFailure ? 'Alto Rischio' : p.successRate >= 0.75 ? 'Ottimale' : 'Moderato';
-
+          {Object.entries(groupedPatterns).map(([secKey, secPatterns]) => {
+            if (secPatterns.length === 0) return null;
             return (
-              <div key={p.id} className="rounded-xl overflow-hidden" style={{
-                background: '#FFFFFF',
-                border: `1px solid ${isFailure ? '#F7CECE' : '#E8EAED'}`,
-                boxShadow: '0 1px 2px rgba(60,64,67,0.10)',
-                borderLeft: `4px solid ${rateColor}`,
-              }}>
-                <div className="p-5">
-                  <div className="flex items-start justify-between gap-4 mb-3">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap mb-2">
-                        {isFailure && <span className="chip chip-red">Anti-Pattern</span>}
-                        {p.extractedBy === 'hermes_analyzer' && !isFailure && <span className="chip chip-blue">AI Learned</span>}
-                        {p.sector && <span className="chip chip-gray">{p.sector.toUpperCase()}</span>}
-                        {p.phase && <span className="chip chip-gray">{p.phase.toUpperCase()}</span>}
-                        {p.avgTimeToOutcome && <span className="chip chip-gray">⏱ {p.avgTimeToOutcome}</span>}
-                      </div>
-                      <h3 className="font-semibold text-base" style={{ color: '#202124' }}>{p.title}</h3>
-                    </div>
-                    {/* Success rate badge */}
-                    <div className="flex-shrink-0 px-4 py-2 rounded-xl text-center" style={{ background: rateBg }}>
-                      <div className="text-xl font-bold tabular-nums" style={{ color: rateColor }}>{(p.successRate * 100).toFixed(0)}%</div>
-                      <div className="text-[10px] font-semibold" style={{ color: rateColor }}>{rateLabel}</div>
-                      <div className="text-[9px] mt-0.5" style={{ color: '#9AA0AC' }}>{p.sampleSize} casi · {(p.confidence * 100).toFixed(0)}% conf.</div>
-                    </div>
-                  </div>
-
-                  <p className="text-sm leading-relaxed mb-4" style={{ color: '#5F6368' }}>{p.description}</p>
-
-                  {/* Progress bar for success rate */}
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="flex-1 h-1.5 rounded-full" style={{ background: '#F1F3F4' }}>
-                      <div className="h-full rounded-full transition-all" style={{ width: `${p.successRate * 100}%`, background: rateColor }} />
-                    </div>
-                    <span className="text-xs tabular-nums" style={{ color: '#9AA0AC', width: '32px', textAlign: 'right' }}>{(p.successRate * 100).toFixed(0)}%</span>
-                  </div>
-
-                  <div className="grid md:grid-cols-2 gap-4">
-                    {p.keyFactors?.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: '#34A853' }}>
-                          <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                          Fattori di Successo
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {p.keyFactors.map((f, i) => <span key={i} className="chip chip-green">{f}</span>)}
-                        </div>
-                      </div>
-                    )}
-                    {p.failureModes?.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold mb-2 flex items-center gap-1.5" style={{ color: '#EA4335' }}>
-                          <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                          Errori Comuni
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {p.failureModes.map((m, i) => <span key={i} className="chip chip-red">{m}</span>)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              <PatternSectionGroup
+                key={secKey}
+                sectionKey={secKey}
+                patterns={secPatterns}
+                isOpen={!!expandedSections[secKey]}
+                onToggle={() => setExpandedSections(prev => ({ ...prev, [secKey]: !prev[secKey] }))}
+              />
             );
           })}
+        </div>
+      )}
+
+      {/* ══ TAB: STORIES ════════════════════════════════════════════ */}
+      {tab === "stories" && (
+        <div className="space-y-4">
+          {/* Stats bar */}
+          <div className="flex flex-wrap items-center gap-4 px-4 py-3 rounded-xl animate-fade-in" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="font-semibold" style={{ color: '#202124' }}>{stories.length}</span>
+              <span style={{ color: '#5F6368' }}>{stories.length === 1 ? 'storia trovata' : 'storie trovate'}</span>
+            </div>
+            <div className="w-px h-4" style={{ background: '#E8EAED' }} />
+            <div className="flex items-center gap-1.5 text-sm">
+              <span className="chip chip-green">{stories.filter(s => s.status === 'success').length} successi</span>
+              <span className="chip chip-red">{stories.filter(s => s.status === 'failure').length} fallimenti</span>
+            </div>
+            <div className="flex-1" />
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setExpandedStoriesSections({ saas: true, fintech: true, ecommerce: true, marketplaces: true, ai: true, social: true, health: true, general: true })}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#F1F3F4] transition-colors border"
+                style={{ color: '#34A853', borderColor: '#DADCE0', background: '#FFFFFF' }}
+              >
+                Espandi tutti
+              </button>
+              <button
+                type="button"
+                onClick={() => setExpandedStoriesSections({ saas: false, fintech: false, ecommerce: false, marketplaces: false, ai: false, social: false, health: false, general: false })}
+                className="px-2.5 py-1.5 rounded-lg text-xs font-semibold hover:bg-[#F1F3F4] transition-colors border"
+                style={{ color: '#5F6368', borderColor: '#DADCE0', background: '#FFFFFF' }}
+              >
+                Comprimi tutti
+              </button>
+            </div>
+          </div>
+
+          {loadingStories ? (
+            <div className="flex justify-center py-16">
+              <div className="w-6 h-6 rounded-full border-2 border-[#34A853] border-t-transparent animate-spin" />
+            </div>
+          ) : stories.length === 0 ? (
+            <div className="text-center py-10 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
+              <p className="text-sm" style={{ color: '#5F6368' }}>Nessuna storia corrispondente ai filtri.</p>
+            </div>
+          ) : (
+            Object.entries(groupedStories).map(([secKey, secStories]) => {
+              if (secStories.length === 0) return null;
+              return (
+                <StorySectionGroup
+                  key={secKey}
+                  sectionKey={secKey}
+                  stories={secStories}
+                  isOpen={!!expandedStoriesSections[secKey]}
+                  onToggle={() => setExpandedStoriesSections(prev => ({ ...prev, [secKey]: !prev[secKey] }))}
+                />
+              );
+            })
+          )}
         </div>
       )}
 

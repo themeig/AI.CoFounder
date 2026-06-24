@@ -386,6 +386,32 @@ function parseInlineMarkdown(text: string) {
   });
 }
 
+function renderList(items: any[], key: string) {
+  const isOrdered = items[0]?.ordered;
+  const Tag = isOrdered ? 'ol' : 'ul';
+  return (
+    <Tag key={key} className={isOrdered ? 'list-decimal' : ''} style={{ paddingLeft: isOrdered ? '1.25rem' : '0.25rem', margin: '6px 0', color: '#3C4043', fontSize: '0.8125rem' }}>
+      {items.map((item, idx) => {
+        const isCheckbox = item.checkbox !== null && item.checkbox !== undefined;
+        return (
+          <li key={idx} className="mb-1 flex items-start gap-1.5" style={{ listStyleType: isOrdered ? undefined : 'none' }}>
+            {item.checkbox === 'checked' && (
+              <span className="text-green-600 font-bold select-none cursor-default" style={{ color: '#137333', fontSize: '0.95rem', lineHeight: '1.2' }}>☑</span>
+            )}
+            {item.checkbox === 'unchecked' && (
+              <span className="text-gray-400 select-none cursor-default" style={{ color: '#9AA0AC', fontSize: '0.95rem', lineHeight: '1.2' }}>☐</span>
+            )}
+            {!isCheckbox && !isOrdered && (
+              <span className="text-gray-400 select-none mr-1.5" style={{ color: '#9AA0AC', fontSize: '0.5rem', alignSelf: 'center', lineHeight: '1' }}>•</span>
+            )}
+            <span className="flex-1 leading-relaxed">{parseInlineMarkdown(item.text)}</span>
+          </li>
+        );
+      })}
+    </Tag>
+  );
+}
+
 function formatMessageContent(
   content: string, 
   onOpenInWorkspace?: (code: string, language: string) => void,
@@ -429,30 +455,100 @@ function formatMessageContent(
       );
     }
 
-    const lines = part.split('\n');
+    const rawLines = part.split('\n');
+    // Preprocess to remove empty lines inside tables
+    const lines: string[] = [];
+    for (let i = 0; i < rawLines.length; i++) {
+      const line = rawLines[i];
+      const trimmed = line.trim();
+      if (trimmed === "") {
+        let prevStarts = false;
+        let nextStarts = false;
+        for (let j = lines.length - 1; j >= 0; j--) {
+          if (lines[j].trim() !== "") {
+            prevStarts = lines[j].trim().startsWith('|');
+            break;
+          }
+        }
+        for (let j = i + 1; j < rawLines.length; j++) {
+          if (rawLines[j].trim() !== "") {
+            nextStarts = rawLines[j].trim().startsWith('|');
+            break;
+          }
+        }
+        if (prevStarts && nextStarts) {
+          continue;
+        }
+      }
+      lines.push(line);
+    }
+
+    let tableRows: any[] = [];
     let listItems: any[] = [];
     let inList = false;
+    let inTable = false;
     const renderedLines: any[] = [];
 
     for (let l = 0; l < lines.length; l++) {
       const line = lines[l];
       const trimmed = line.trim();
 
+      if (trimmed.startsWith('|')) {
+        if (inList && listItems.length > 0) {
+          renderedLines.push(renderList(listItems, `list-${l}`));
+          listItems = [];
+          inList = false;
+        }
+        inTable = true;
+        if (line.includes('---')) continue;
+        const cells = line.split('|').map(c => c.trim()).filter((_, idx, arr) => idx > 0 && idx < arr.length - 1);
+        tableRows.push(cells);
+        continue;
+      } else if (inTable) {
+        inTable = false;
+        renderedLines.push(
+          <div key={`table-${l}`} className="my-3 overflow-x-auto rounded-lg" style={{ border: '1px solid #E8EAED' }}>
+            <table className="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
+                  {tableRows[0]?.map((cell: string, idx: number) => (
+                    <th key={idx} className="p-2.5 font-semibold" style={{ color: '#5F6368' }}>{parseInlineMarkdown(cell)}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {tableRows.slice(1).map((row: string[], rowIdx: number) => (
+                  <tr key={rowIdx} style={{ borderBottom: '1px solid #F1F3F4' }}>
+                    {row.map((cell: string, idx: number) => (
+                      <td key={idx} className="p-2.5" style={{ color: '#202124' }}>{parseInlineMarkdown(cell)}</td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        );
+        tableRows = [];
+      }
+
       if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
         inList = true;
-        listItems.push({ text: trimmed.slice(2), ordered: false });
+        let itemText = trimmed.slice(2);
+        let checkbox: 'checked' | 'unchecked' | null = null;
+        if (itemText.startsWith('[ ] ')) {
+          checkbox = 'unchecked';
+          itemText = itemText.slice(4);
+        } else if (itemText.startsWith('[x] ') || itemText.startsWith('[X] ')) {
+          checkbox = 'checked';
+          itemText = itemText.slice(4);
+        }
+        listItems.push({ text: itemText, ordered: false, checkbox });
       } else if (/^\d+\.\s/.test(trimmed)) {
         inList = true;
-        listItems.push({ text: trimmed.replace(/^\d+\.\s/, ''), ordered: true });
+        listItems.push({ text: trimmed.replace(/^\d+\.\s/, ''), ordered: true, checkbox: null });
       } else {
         if (inList && listItems.length > 0) {
-          const isOrdered = listItems[0].ordered;
-          const Tag = isOrdered ? 'ol' : 'ul';
-          renderedLines.push(
-            <Tag key={`list-${l}`} className={isOrdered ? 'list-decimal' : 'list-disc'} style={{ paddingLeft: '1.25rem', margin: '6px 0', color: '#3C4043', fontSize: '0.8125rem' }}>
-              {listItems.map((item, idx) => <li key={idx} className="mb-0.5">{parseInlineMarkdown(item.text)}</li>)}
-            </Tag>
-          );
+          renderedLines.push(renderList(listItems, `list-${l}`));
           listItems = [];
           inList = false;
         }
@@ -463,7 +559,7 @@ function formatMessageContent(
           renderedLines.push(<h3 key={l} className="text-base font-bold mt-4 mb-2" style={{ color: '#202124', borderBottom: '1px solid #E8EAED', paddingBottom: '2px' }}>{parseInlineMarkdown(trimmed.slice(3))}</h3>);
         } else if (trimmed.startsWith('# ')) {
           renderedLines.push(<h2 key={l} className="text-lg font-bold mt-5 mb-3" style={{ color: '#202124' }}>{parseInlineMarkdown(trimmed.slice(2))}</h2>);
-        } else if (trimmed.startsWith('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')) {
+        } else if (trimmed === '---' || trimmed === '***' || trimmed === '___' || trimmed.startsWith('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')) {
           renderedLines.push(<hr key={l} className="my-4" style={{ borderColor: '#E8EAED' }} />);
         } else if (trimmed.startsWith('>') && trimmed.includes('[!')) {
           const alertType = trimmed.includes('IMPORTANT') ? 'IMPORTANT' : trimmed.includes('WARNING') ? 'WARNING' : 'NOTE';
@@ -487,14 +583,33 @@ function formatMessageContent(
       }
     }
 
-    if (inList && listItems.length > 0) {
-      const isOrdered = listItems[0].ordered;
-      const Tag = isOrdered ? 'ol' : 'ul';
+    if (tableRows.length > 0) {
       renderedLines.push(
-        <Tag key="list-flush" className={isOrdered ? 'list-decimal' : 'list-disc'} style={{ paddingLeft: '1.25rem', margin: '6px 0', color: '#3C4043', fontSize: '0.8125rem' }}>
-          {listItems.map((item, idx) => <li key={idx} className="mb-0.5">{parseInlineMarkdown(item.text)}</li>)}
-        </Tag>
+        <div key="table-flush" className="my-3 overflow-x-auto rounded-lg" style={{ border: '1px solid #E8EAED' }}>
+          <table className="w-full text-left border-collapse text-xs">
+            <thead>
+              <tr style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
+                {tableRows[0]?.map((cell: string, idx: number) => (
+                  <th key={idx} className="p-2.5 font-semibold" style={{ color: '#5F6368' }}>{parseInlineMarkdown(cell)}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {tableRows.slice(1).map((row: string[], rowIdx: number) => (
+                <tr key={rowIdx} style={{ borderBottom: '1px solid #F1F3F4' }}>
+                  {row.map((cell: string, idx: number) => (
+                    <td key={idx} className="p-2.5" style={{ color: '#202124' }}>{parseInlineMarkdown(cell)}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       );
+    }
+
+    if (inList && listItems.length > 0) {
+      renderedLines.push(renderList(listItems, "list-flush"));
     }
 
     return <div key={index}>{renderedLines}</div>;

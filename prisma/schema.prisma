@@ -199,3 +199,17 @@ model VectorMemory {
   updatedAt     DateTime    @updatedAt
   @@index([agentConfigId])
 }
+
+model CaseStudy {
+  id          String   @id @default(cuid())
+  title       String
+  description String   @db.Text
+  embedding   Unsupported("vector(1536)")?
+  sector      String?
+  status      String   // "success" | "failure"
+  takeaway    String   @db.Text
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  @@index([sector])
+}

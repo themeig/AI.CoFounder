@@ -15,22 +15,21 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const searchQuery = searchParams.get("search") || "";
     const sector = searchParams.get("sector") || "all";
-    const phase = searchParams.get("phase") || "all";
-    const minRate = parseFloat(searchParams.get("minRate") || "0.0") / 100.0;
+    const status = searchParams.get("status") || "all";
 
     const headers: Record<string, string> = {
       "apikey": SUPABASE_SERVICE_KEY,
       "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
     };
 
-    // --- Case 1: Semantic Vector Search ---
+    // --- Case 1: Semantic Search via match_stories RPC ---
     if (searchQuery.trim().length > 0) {
       try {
-        console.log(`[Patterns API] Executing semantic search for: "${searchQuery}"`);
+        console.log(`[Stories API] Executing semantic search for: "${searchQuery}"`);
         const queryEmbedding = await generateEmbedding(searchQuery);
 
         const res = await fetch(
-          SUPABASE_URL + "/rest/v1/rpc/match_patterns",
+          SUPABASE_URL + "/rest/v1/rpc/match_stories",
           {
             method: "POST",
             headers: {
@@ -42,29 +41,28 @@ export async function GET(request: NextRequest) {
               match_threshold: 0.25,
               match_count: 50,
               filter_sector: sector,
-              filter_phase: phase,
-              min_rate: minRate
+              filter_status: status
             })
           }
         );
 
         if (res.ok) {
-          const matchedPatterns = await res.json();
-          console.log(`[Patterns API] Returned ${matchedPatterns.length} semantically matched patterns.`);
-          return NextResponse.json(matchedPatterns);
+          const matchedStories = await res.json();
+          console.log(`[Stories API] Returned ${matchedStories.length} semantically matched stories.`);
+          return NextResponse.json(matchedStories);
         }
         const errText = await res.text();
-        console.warn("[Patterns API] Semantic matching RPC failed:", res.status, errText, "; falling back to full list.");
+        console.warn("[Stories API] Semantic matching RPC failed:", res.status, errText, "; falling back to full list.");
       } catch (err: any) {
-        console.warn("[Patterns API] Semantic search failed:", err.message, "; falling back to full list.");
+        console.warn("[Stories API] Semantic search failed:", err.message, "; falling back.");
       }
     }
 
-    // --- Case 2: Standard Fetch (All active patterns) ---
+    // --- Case 2: Standard Fetch ---
     let filterString = "isActive=eq.true";
     if (sector !== "all") filterString += `&sector=eq.${sector}`;
-    if (phase !== "all") filterString += `&phase=eq.${phase}`;
-    
+    if (status !== "all") filterString += `&status=eq.${status}`;
+
     const rangeHeaders = {
       ...headers,
       "Range": "0-499",
@@ -73,7 +71,7 @@ export async function GET(request: NextRequest) {
     };
 
     const res = await fetch(
-      `${SUPABASE_URL}/rest/v1/Pattern?select=*&${filterString}&order=createdAt.desc`,
+      `${SUPABASE_URL}/rest/v1/CaseStudy?select=*&${filterString}&order=createdAt.desc`,
       {
         headers: rangeHeaders,
         cache: "no-store"
@@ -82,17 +80,16 @@ export async function GET(request: NextRequest) {
 
     if (!res.ok) {
       const errText = await res.text();
-      console.error("[Patterns API] Supabase fetch error:", res.status, errText);
+      console.error("[Stories API] Supabase fetch error:", res.status, errText);
       return NextResponse.json([]);
     }
 
     const data = await res.json();
-    const patterns = Array.isArray(data) ? data : [];
-    console.log(`[Patterns API] Returned ${patterns.length} patterns from Supabase`);
-    return NextResponse.json(patterns);
+    const stories = Array.isArray(data) ? data : [];
+    console.log(`[Stories API] Returned ${stories.length} stories from Supabase`);
+    return NextResponse.json(stories);
   } catch (err) {
-    console.error("Patterns error:", err);
+    console.error("Stories API error:", err);
     return NextResponse.json([]);
   }
 }
-

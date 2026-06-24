@@ -5,6 +5,8 @@ import { getApiKey } from "@/lib/secure-store";
 import { exec } from "child_process";
 import * as os from "os";
 import { getArtifacts, saveArtifacts, Artifact } from "@/lib/custom-artifacts";
+import { recall, autoExtractMemories } from "@/lib/mnemosyne";
+import { generateEmbedding } from "@/lib/embeddings";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -30,6 +32,40 @@ async function supabaseFetch(path: string, options: any = {}) {
     throw new Error(`Supabase error: ${response.status} - ${errorText}`);
   }
   return response.json();
+}
+
+async function semanticSearchStories(userMessage: string, cap = 3): Promise<any[]> {
+  try {
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) return [];
+    const queryEmbedding = await generateEmbedding(userMessage);
+    const response = await fetch(
+      SUPABASE_URL + "/rest/v1/rpc/match_stories",
+      {
+        method: "POST",
+        headers: {
+          "apikey": SUPABASE_SERVICE_KEY,
+          "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          query_embedding: queryEmbedding,
+          match_threshold: 0.25,
+          match_count: cap,
+          filter_sector: "all",
+          filter_status: "all"
+        })
+      }
+    );
+    if (response.ok) {
+      return await response.json();
+    }
+    const errText = await response.text();
+    console.warn("[Cofounder API] match_stories failed:", response.status, errText);
+    return [];
+  } catch (err: any) {
+    console.error("[Cofounder API] error in semanticSearchStories:", err.message);
+    return [];
+  }
 }
 
 const CONNECTIONS_FILE_PATH = path.join(process.cwd(), "src/lib/custom-connections.json");
@@ -506,6 +542,85 @@ export async function POST(req: Request) {
         const startup = startups[0];
         const startupId = startup.id;
 
+        // Load or create cofounder AgentConfig
+        let cofounderConfig;
+        try {
+          const cofounderConfigs = await supabaseFetch(
+            `/AgentConfig?startupId=eq.${startupId}&type=eq.cofounder&select=*`
+          );
+          if (cofounderConfigs && cofounderConfigs.length > 0) {
+            cofounderConfig = cofounderConfigs[0];
+          } else {
+            push("debug", "🧠 Creazione configurazione memoria per Co-Founder...");
+            const newConfigs = await supabaseFetch(`/AgentConfig`, {
+              method: "POST",
+              body: JSON.stringify({
+                startupId,
+                type: "cofounder",
+                name: cofounderName,
+                isActive: true,
+                settings: {
+                  enabledTools: [
+                    "webSearch", "readWebPage", "getStartupInfo", "getCustomMetrics",
+                    "runPythonScript", "runTypeScriptScript", "createOrUpdateArtifact",
+                    "runArtifact", "getActiveArtifacts", "renameDiscussion"
+                  ],
+                  useLongTermMemory: true,
+                  recencyBias: 0.5,
+                  autoSaveInteractions: true
+                }
+              })
+            });
+            if (newConfigs && newConfigs.length > 0) {
+              cofounderConfig = newConfigs[0];
+            }
+          }
+        } catch (dbErr: any) {
+          console.error("Error fetching/creating cofounder config:", dbErr.message);
+        }
+
+        // Retrieve long-term memories (Mnemosyne)
+        const userMessage = messages[messages.length - 1]?.content || "";
+        let mnemosyneContext = "";
+        if (cofounderConfig && userMessage) {
+          push("debug", "🧠 Ricerca ricordi mnemonici (Mnemosyne) per Co-Founder...");
+          try {
+            const recalled = await recall(cofounderConfig.id, userMessage, 3, 0.5);
+            if (recalled && recalled.length > 0) {
+              mnemosyneContext = "\n\n--- RICORDI MNEMOSYNE (Memoria a lungo termine pertinente) ---\n" +
+                recalled.map(m => `- [Ricordo (${m.scope}) - importanza: ${m.importance}]: ${m.content}`).join("\n") +
+                "\n------------------------------------------------------------";
+              push("debug", `🧠 Caricati ${recalled.length} ricordi pertinenti dalla memoria semantica.`);
+            } else {
+              push("debug", "🧠 Nessun ricordo pertinente trovato per questa richiesta.");
+            }
+          } catch (memErr: any) {
+            console.error("Error recalling from Mnemosyne (cofounder):", memErr.message);
+          }
+        }
+
+        // Retrieve relevant case studies (Stories)
+        let storiesContext = "";
+        if (userMessage) {
+          push("debug", "📊 Ricerca casi di studio (Storie) pertinenti per Co-Founder...");
+          try {
+            const matchedStories = await semanticSearchStories(userMessage, 3);
+            if (matchedStories && matchedStories.length > 0) {
+              storiesContext = "\n\n--- CASI DI STUDIO E STORIE PERTINENTI (Esempi di successo/fallimento reali) ---\n" +
+                matchedStories.map(s => {
+                  const statusLabel = s.status === 'success' ? 'SUCCESSO' : 'FALLIMENTO';
+                  return `- **${s.title}** (${s.sector} - ${statusLabel}):\n  Descrizione: ${s.description}\n  Takeaway: ${s.takeaway}`;
+                }).join("\n\n") +
+                "\n------------------------------------------------------------";
+              push("debug", `📊 Caricate ${matchedStories.length} storie pertinenti dal database.`);
+            } else {
+              push("debug", "📊 Nessuna storia pertinente trovata.");
+            }
+          } catch (storyErr: any) {
+            console.error("Error matching stories (cofounder):", storyErr.message);
+          }
+        }
+
         const systemPrompt = `Sei ${cofounderName}, il Co-Founder AI di AgentFoundry — l'intelligenza centrale e orchestratore supremo di un team di agenti specializzati.
 Non sei un semplice chatbot. Sei un co-fondatore digitale, un general manager strategico e un ingegnere di sistema — tutto in uno.
 Il tuo superpotere è la capacità di spezzare qualsiasi problema complesso in sotto-task specializzati, delegarli agli agenti giusti, raccogliere le loro analisi esperte e sintetizzarle in una risposta unitaria, coerente e immediatamente actionable per il fondatore.
@@ -636,6 +751,7 @@ Dopo aver ricevuto le analisi degli agenti:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 - Rispondi SEMPRE in italiano, con un tono diretto e da partner strategico, mai da assistente servile.
+- Cita gli esempi reali delle startup forniti nel contesto (es. Figma, Salesforce, Melio, ecc. presenti nella sezione \`--- CASI DI STUDIO E STORIE PERTINENTI ---\`) per supportare i tuoi consigli e le tue analisi, menzionando dati concreti (metriche chiave di ricavi, valutazioni e investimenti iniziali) e lezioni apprese.
 - Non menzionare mai all'utente i nomi tecnici dei tool interni (es: non dire "uso runPythonScript" o "ho chiamato getActiveAgents"). Parla invece di "ho fatto girare una simulazione nella sandbox", "ho controllato il team", "ho delegato l'agente finanziario", ecc.
 - Usa elenchi puntati e tabelle per strutturare i dati, evitando muri di testo.
 - Sii conciso ma completo: ogni risposta deve essere immediatamente actionable.
@@ -794,7 +910,7 @@ manager.print();
 \`\`\`
 `;
 
-        let apiMessages: any[] = [{ role: "system", content: systemPrompt }, ...messages];
+        let apiMessages: any[] = [{ role: "system", content: systemPrompt + mnemosyneContext + storiesContext }, ...messages];
         const executedTools: any[] = [];
         const delegations: any[] = [];
         let agentSuggestion: any = null;
@@ -1276,6 +1392,17 @@ manager.print();
             finalContent = currentAssistantText;
             keepRunning = false;
           }
+        }
+
+        // Auto extract memories in background (Mnemosyne)
+        if (cofounderConfig && userMessage && finalContent) {
+          autoExtractMemories(cofounderConfig.id, userMessage, finalContent)
+            .then(extracted => {
+              console.log(`[Mnemosyne cofounder] Extracted ${extracted.length} memories.`);
+            })
+            .catch(err => {
+              console.error("[Mnemosyne cofounder] Error in background extraction:", err.message);
+            });
         }
 
         push("done", { content: finalContent, executedTools, delegations, agentSuggestion });
