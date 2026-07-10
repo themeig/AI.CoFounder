@@ -21,11 +21,18 @@ export async function POST() {
       SUPABASE_URL + "/rest/v1/User?email=eq.demo@agentfoundry.ai&select=id",
       { headers }
     );
+    if (!userCheckRes.ok) {
+      const errText = await userCheckRes.text();
+      return NextResponse.json(
+        { error: `Supabase: Errore di connessione (${userCheckRes.status})`, details: errText },
+        { status: 500 }
+      );
+    }
     const existingUsers = await userCheckRes.json();
 
     let userId = null;
 
-    if (existingUsers && existingUsers.length > 0) {
+    if (existingUsers && Array.isArray(existingUsers) && existingUsers.length > 0) {
       userId = existingUsers[0].id;
     } else {
       // Create demo user (columns: id, name, email, emailVerified, image, createdAt, updatedAt)
@@ -37,6 +44,13 @@ export async function POST() {
           name: "Demo Founder",
         }),
       });
+      if (!createRes.ok) {
+        const errText = await createRes.text();
+        return NextResponse.json(
+          { error: `Supabase: Impossibile creare utente demo (${createRes.status})`, details: errText },
+          { status: 500 }
+        );
+      }
       const newUsers = await createRes.json();
       if (Array.isArray(newUsers) && newUsers.length > 0) {
         userId = newUsers[0].id;
@@ -52,10 +66,17 @@ export async function POST() {
       SUPABASE_URL + "/rest/v1/Startup?userId=eq." + userId + "&select=id",
       { headers }
     );
+    if (!startupCheckRes.ok) {
+      const errText = await startupCheckRes.text();
+      return NextResponse.json(
+        { error: `Supabase: Impossibile verificare startup demo (${startupCheckRes.status})`, details: errText },
+        { status: 500 }
+      );
+    }
     const existingStartups = await startupCheckRes.json();
 
-    if (!existingStartups || existingStartups.length === 0) {
-      await fetch(SUPABASE_URL + "/rest/v1/Startup", {
+    if (!existingStartups || !Array.isArray(existingStartups) || existingStartups.length === 0) {
+      const createStartupRes = await fetch(SUPABASE_URL + "/rest/v1/Startup", {
         method: "POST",
         headers,
         body: JSON.stringify({
@@ -66,6 +87,13 @@ export async function POST() {
           phase: "idea",
         }),
       });
+      if (!createStartupRes.ok) {
+        const errText = await createStartupRes.text();
+        return NextResponse.json(
+          { error: `Supabase: Impossibile creare startup demo (${createStartupRes.status})`, details: errText },
+          { status: 500 }
+        );
+      }
     }
 
     // 3. Set session cookie
