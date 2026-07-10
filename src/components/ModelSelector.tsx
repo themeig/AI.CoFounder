@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { AVAILABLE_MODELS, type ModelInfo } from '@/lib/models';
+import { getClientModels, type ModelInfo } from '@/lib/models';
 
 interface ModelSelectorProps {
   selectedModel: string;
@@ -13,11 +13,8 @@ export default function ModelSelector({ selectedModel, onModelChange }: ModelSel
   const [models, setModels] = useState<ModelInfo[]>([]);
 
   useEffect(() => {
-    fetch('/api/demo/chat')
-      .then(res => res.json())
-      .then(data => { if (data.models) setModels(data.models); else setModels(AVAILABLE_MODELS); })
-      .catch(() => setModels(AVAILABLE_MODELS));
-  }, []);
+    setModels(getClientModels());
+  }, [selectedModel]);
 
   const currentModel = models.find(m => m.id === selectedModel) || models[0];
   const freeModels = models.filter(m => m.free);

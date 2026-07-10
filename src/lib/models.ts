@@ -22,6 +22,15 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
     quality: 'excellent',
   },
   {
+    id: 'tencent/hy3:free',
+    name: 'Tencent Hy3 (Free)',
+    description: 'Modello MoE da 295B per ragionamento e codifica (scadenza 21 Luglio 2026)',
+    contextLength: 256000,
+    free: true,
+    speed: 'medium',
+    quality: 'excellent',
+  },
+  {
     id: 'openrouter/free',
     name: 'Auto Free',
     description: 'OpenRouter sceglie automaticamente il miglior modello gratuito',
@@ -81,7 +90,25 @@ export const AVAILABLE_MODELS: ModelInfo[] = [
 export const DEFAULT_MODEL = 'openrouter/owl-alpha';
 
 export function getModelInfo(id: string): ModelInfo | undefined {
+  if (typeof window !== 'undefined') {
+    const all = getClientModels();
+    return all.find(m => m.id === id);
+  }
   return AVAILABLE_MODELS.find(m => m.id === id);
+}
+
+export function getClientModels(): ModelInfo[] {
+  if (typeof window === 'undefined') return AVAILABLE_MODELS;
+  try {
+    const custom = window.localStorage.getItem('agentfoundry_custom_models');
+    if (custom) {
+      const parsed = JSON.parse(custom);
+      if (Array.isArray(parsed)) {
+        return [...AVAILABLE_MODELS, ...parsed];
+      }
+    }
+  } catch {}
+  return AVAILABLE_MODELS;
 }
 
 // ============================================================

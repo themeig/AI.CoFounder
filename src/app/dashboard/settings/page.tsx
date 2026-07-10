@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { AVAILABLE_MODELS } from '@/lib/models';
+import { AVAILABLE_MODELS, getClientModels, type ModelInfo } from '@/lib/models';
 import { DEFAULT_APP_SETTINGS } from '@/lib/settings';
 
 export default function SettingsPage() {
@@ -12,7 +12,19 @@ export default function SettingsPage() {
   const [tavilyKeyInput, setTavilyKeyInput] = useState('');
   const [savingKey, setSavingKey] = useState(false);
 
+  // Custom models state
+  const [models, setModels] = useState<ModelInfo[]>([]);
+  const [showAddCustom, setShowAddCustom] = useState(false);
+  const [newModelId, setNewModelId] = useState('');
+  const [newModelName, setNewModelName] = useState('');
+  const [newModelDesc, setNewModelDesc] = useState('');
+  const [newModelContext, setNewModelContext] = useState(128000);
+  const [newModelFree, setNewModelFree] = useState(false);
+  const [newModelSpeed, setNewModelSpeed] = useState<'fast' | 'medium' | 'slow'>('medium');
+  const [newModelQuality, setNewModelQuality] = useState<'basic' | 'good' | 'excellent'>('good');
+
   useEffect(() => {
+    setModels(getClientModels());
     const stored = localStorage.getItem('agentfoundry_settings');
     if (stored) {
       try { setSettings({ ...DEFAULT_APP_SETTINGS, ...JSON.parse(stored) }); } catch {}
@@ -29,6 +41,64 @@ export default function SettingsPage() {
       })
       .catch(err => console.error("Errore caricamento stato Tavily:", err));
   }, []);
+
+  const handleAddCustomModel = () => {
+    if (!newModelId || !newModelName) return;
+    const newModel: ModelInfo = {
+      id: newModelId.trim(),
+      name: newModelName.trim(),
+      description: newModelDesc.trim() || 'Modello personalizzato OpenRouter',
+      contextLength: Number(newModelContext) || 128000,
+      free: newModelFree,
+      speed: newModelSpeed,
+      quality: newModelQuality
+    };
+
+    const storedCustom = localStorage.getItem('agentfoundry_custom_models');
+    let customList: ModelInfo[] = [];
+    if (storedCustom) {
+      try { customList = JSON.parse(storedCustom); } catch {}
+    }
+    // Evita duplicati
+    if (!customList.some(m => m.id === newModel.id)) {
+      customList.push(newModel);
+    }
+    localStorage.setItem('agentfoundry_custom_models', JSON.stringify(customList));
+
+    // Ricarica e seleziona
+    const updatedModels = getClientModels();
+    setModels(updatedModels);
+    setSettings(prev => ({ ...prev, defaultModel: newModel.id }));
+
+    // Reset form
+    setNewModelId('');
+    setNewModelName('');
+    setNewModelDesc('');
+    setNewModelContext(128000);
+    setNewModelFree(false);
+    setNewModelSpeed('medium');
+    setNewModelQuality('good');
+    setShowAddCustom(false);
+  };
+
+  const handleDeleteCustomModel = (modelId: string) => {
+    const storedCustom = localStorage.getItem('agentfoundry_custom_models');
+    if (storedCustom) {
+      try {
+        let customList: ModelInfo[] = JSON.parse(storedCustom);
+        customList = customList.filter(m => m.id !== modelId);
+        localStorage.setItem('agentfoundry_custom_models', JSON.stringify(customList));
+        
+        // Ricarica
+        setModels(getClientModels());
+        
+        // Se il modello rimosso era selezionato, ripiega sul default
+        if (settings.defaultModel === modelId) {
+          setSettings(prev => ({ ...prev, defaultModel: 'openrouter/owl-alpha' }));
+        }
+      } catch {}
+    }
+  };
 
   const saveSettings = async () => {
     localStorage.setItem('agentfoundry_settings', JSON.stringify(settings));
@@ -70,7 +140,7 @@ export default function SettingsPage() {
     }
   };
 
-  const currentModel = AVAILABLE_MODELS.find(m => m.id === settings.defaultModel);
+  const currentModel = models.find(m => m.id === settings.defaultModel);
 
   return (
     <div className="max-w-3xl mx-auto p-8 space-y-6 animate-fade-in">
@@ -106,14 +176,14 @@ export default function SettingsPage() {
               style={{ background: '#F8F9FA', border: '1px solid #DADCE0', color: '#202124' }}
             >
               <optgroup label="Gratuiti">
-                {AVAILABLE_MODELS.filter(m => m.free).map(m => (
+                {models.filter(m => m.free).map(m => (
                   <option key={m.id} value={m.id}>
                     {m.name} — {m.description} ({(m.contextLength / 1000).toFixed(0)}K ctx)
                   </option>
                 ))}
               </optgroup>
               <optgroup label="A pagamento">
-                {AVAILABLE_MODELS.filter(m => !m.free).map(m => (
+                {models.filter(m => !m.free).map(m => (
                   <option key={m.id} value={m.id}>
                     {m.name} — {m.description} ({(m.contextLength / 1000).toFixed(0)}K ctx)
                   </option>
@@ -134,12 +204,153 @@ export default function SettingsPage() {
                   {currentModel.free ? 'Gratuito' : 'A pagamento'}
                 </span>
                 <span className="chip chip-gray">{(currentModel.contextLength / 1000).toFixed(0)}K ctx</span>
-                <span className={`chip ${currentModel.quality === 'excellent' ? 'chip-blue' : 'chip-gray'}`}>
-                  {currentModel.quality}
-                </span>
+                {currentModel.quality && (
+                  <span className={`chip ${currentModel.quality === 'excellent' ? 'chip-blue' : 'chip-gray'}`}>
+                    {currentModel.quality}
+                  </span>
+                )}
               </div>
             </div>
           )}
+
+          {/* Custom Models Actions */}
+          <div className="pt-4 border-t border-[#F1F3F4] space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold" style={{ color: '#202124' }}>
+                Modelli personalizzati
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAddCustom(!showAddCustom)}
+                className="text-xs font-semibold text-[#1A73E8] hover:underline"
+              >
+                {showAddCustom ? 'Annulla' : '+ Aggiungi modello'}
+              </button>
+            </div>
+
+            {/* List of custom models */}
+            {models.filter(m => !AVAILABLE_MODELS.some(am => am.id === m.id)).length > 0 && (
+              <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
+                {models.filter(m => !AVAILABLE_MODELS.some(am => am.id === m.id)).map(m => (
+                  <div key={m.id} className="flex items-center justify-between p-2 rounded-lg text-xs animate-fade-in" style={{ background: '#F8F9FA', border: '1px solid #E8EAED' }}>
+                    <div className="truncate flex-1 min-w-0 mr-2">
+                      <span className="font-semibold block truncate" style={{ color: '#202124' }}>{m.name}</span>
+                      <span className="text-[10px] block truncate" style={{ color: '#5F6368' }}>{m.id}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteCustomModel(m.id)}
+                      className="text-[10px] font-semibold text-[#EA4335] hover:underline px-2 py-1 rounded"
+                    >
+                      Rimuovi
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Add Custom Model Form */}
+            {showAddCustom && (
+              <div className="p-4 rounded-xl space-y-3 animate-fade-in text-left" style={{ background: '#F8F9FA', border: '1px solid #E8EAED' }}>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>ID Modello OpenRouter</label>
+                    <input
+                      type="text"
+                      placeholder="es: meta-llama/llama-3-8b-instruct"
+                      value={newModelId}
+                      onChange={e => setNewModelId(e.target.value)}
+                      className="w-full px-2 py-1.5 rounded text-xs focus:outline-none"
+                      style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>Nome Visualizzato</label>
+                    <input
+                      type="text"
+                      placeholder="es: Llama 3 8B"
+                      value={newModelName}
+                      onChange={e => setNewModelName(e.target.value)}
+                      className="w-full px-2 py-1.5 rounded text-xs focus:outline-none"
+                      style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>Descrizione</label>
+                  <input
+                    type="text"
+                    placeholder="Breve descrizione delle caratteristiche del modello..."
+                    value={newModelDesc}
+                    onChange={e => setNewModelDesc(e.target.value)}
+                    className="w-full px-2 py-1.5 rounded text-xs focus:outline-none"
+                    style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end">
+                  <div>
+                    <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>Contesto (Tokens)</label>
+                    <input
+                      type="number"
+                      value={newModelContext}
+                      onChange={e => setNewModelContext(Number(e.target.value))}
+                      className="w-full px-2 py-1.5 rounded text-xs focus:outline-none"
+                      style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>Velocità</label>
+                    <select
+                      value={newModelSpeed}
+                      onChange={e => setNewModelSpeed(e.target.value as any)}
+                      className="w-full px-2 py-1.5 rounded text-xs focus:outline-none"
+                      style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
+                    >
+                      <option value="fast">Veloce</option>
+                      <option value="medium">Media</option>
+                      <option value="slow">Lenta</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-semibold mb-1" style={{ color: '#5F6368' }}>Qualità</label>
+                    <select
+                      value={newModelQuality}
+                      onChange={e => setNewModelQuality(e.target.value as any)}
+                      className="w-full px-2 py-1.5 rounded text-xs focus:outline-none"
+                      style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
+                    >
+                      <option value="basic">Base</option>
+                      <option value="good">Buona</option>
+                      <option value="excellent">Eccellente</option>
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-1.5 h-[32px]">
+                    <input
+                      type="checkbox"
+                      id="newModelFree"
+                      checked={newModelFree}
+                      onChange={e => setNewModelFree(e.target.checked)}
+                      className="rounded border-gray-300"
+                    />
+                    <label htmlFor="newModelFree" className="text-[10px] font-semibold cursor-pointer" style={{ color: '#5F6368', userSelect: 'none' }}>Gratuito</label>
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleAddCustomModel}
+                    disabled={!newModelId || !newModelName}
+                    className="px-3 py-1.5 rounded text-xs font-semibold text-white bg-[#1A73E8] hover:bg-[#1557B0] disabled:opacity-50"
+                  >
+                    Aggiungi
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

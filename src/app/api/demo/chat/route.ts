@@ -816,7 +816,7 @@ ${rulesSection}
 
           const selectedModel = modelId || DEFAULT_MODEL;
           const modelInfo = findModel(selectedModel);
-          const modelToUse = modelInfo ? modelInfo.id : DEFAULT_MODEL;
+          const modelToUse = modelInfo ? modelInfo.id : selectedModel;
 
           // Define Tools dynamically
           const tools: any[] = [];
