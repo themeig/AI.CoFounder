@@ -45,6 +45,7 @@ interface Discussion {
   id: string;
   title: string;
   messages: CofounderMessage[];
+  todos?: any[];
   createdAt: string;
   updatedAt: string;
   isGenerating?: boolean;
@@ -756,6 +757,195 @@ function InlineArtifactCard({
     </div>
   );
 }
+
+function ToolItem({ tool }: { tool: any }) {
+  const [showArgs, setShowArgs] = useState(false);
+  const hasArgs = tool.arguments && Object.keys(tool.arguments).length > 0;
+  const isSuccess = tool.success;
+
+  return (
+    <div className={`border border-gray-200/80 ${isSuccess ? 'border-l-[3px] border-l-green-500' : 'border-l-[3px] border-l-red-500'} rounded-r-lg p-2.5 bg-white shadow-2xs`}>
+      <div className="flex items-center justify-between font-mono text-[9px] mb-1">
+        <span className="text-blue-600 font-bold flex items-center gap-1">
+          <span>🔧</span> {tool.name}
+        </span>
+        <div className="flex items-center gap-2">
+          {hasArgs && (
+            <button
+              type="button"
+              onClick={() => setShowArgs(!showArgs)}
+              className="text-[8px] font-sans font-semibold text-gray-500 hover:text-blue-600 border border-gray-200 bg-gray-55 px-1.5 py-0.5 rounded transition"
+            >
+              {showArgs ? 'Nascondi parametri' : 'Mostra parametri'}
+            </button>
+          )}
+          <span className={`font-bold px-1.5 py-0.5 rounded text-[8px] tracking-wider ${isSuccess ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+            {isSuccess ? 'COMPLETATO' : 'FALLITO'}
+          </span>
+        </div>
+      </div>
+      <p className="text-[10px] text-gray-600 font-medium leading-relaxed">{tool.details}</p>
+      
+      {showArgs && hasArgs && (
+        <pre className="mt-2 p-2 rounded border border-gray-200 bg-gray-50/50 text-[9px] font-mono text-gray-700 overflow-x-auto max-h-40">
+          <code>{JSON.stringify(tool.arguments, null, 2)}</code>
+        </pre>
+      )}
+    </div>
+  );
+}
+
+function ThinkingContainer({ 
+  thinking, 
+  tools, 
+  isStreaming, 
+  thinkingTime,
+  activeToolLabel,
+  activeDelegations,
+  activeThinkingTime
+}: { 
+  thinking?: string; 
+  tools?: any[]; 
+  isStreaming?: boolean; 
+  thinkingTime?: string;
+  activeToolLabel?: string | null;
+  activeDelegations?: any[];
+  activeThinkingTime?: string;
+}) {
+  const [isOpen, setIsOpen] = useState(true);
+
+  // Auto-expand while streaming
+  useEffect(() => {
+    if (isStreaming) {
+      setIsOpen(true);
+    }
+  }, [isStreaming]);
+
+  const hasTools = tools && tools.length > 0;
+  const hasDelegations = activeDelegations && activeDelegations.length > 0;
+  const showActiveTool = isStreaming && activeToolLabel;
+  const showActiveDelegations = isStreaming && hasDelegations;
+  
+  if (!thinking && !hasTools && !showActiveTool && !showActiveDelegations) return null;
+
+  return (
+    <div className={`mb-3 mt-3 border rounded-xl overflow-hidden transition-all duration-300 w-full text-left ${
+      isStreaming 
+        ? 'border-blue-400 bg-blue-50/10 shadow-[0_0_12px_rgba(26,115,232,0.1)] animate-pulse-border' 
+        : 'border-gray-200 bg-gray-55/50 shadow-2xs'
+    }`}>
+      {/* CSS custom per pulsazione bordo */}
+      <style dangerouslySetInnerHTML={{__html: `
+        @keyframes borderPulse {
+          0% { border-color: rgba(26, 115, 232, 0.25); box-shadow: 0 0 4px rgba(26, 115, 232, 0.1); }
+          50% { border-color: rgba(26, 115, 232, 0.7); box-shadow: 0 0 16px rgba(26, 115, 232, 0.25); }
+          100% { border-color: rgba(26, 115, 232, 0.25); box-shadow: 0 0 4px rgba(26, 115, 232, 0.1); }
+        }
+        .animate-pulse-border {
+          animation: borderPulse 2.5s infinite ease-in-out;
+        }
+      `}} />
+
+      {/* Header */}
+      <div 
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center justify-between px-4 py-2.5 cursor-pointer select-none bg-gray-100/50 hover:bg-gray-150 transition-colors"
+      >
+        <div className="flex items-center gap-2">
+          {isStreaming ? (
+            <span className="relative flex h-2 w-2">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1A73E8] opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1A73E8]"></span>
+            </span>
+          ) : (
+            <span className="text-green-600 font-bold select-none text-[11px]">✓</span>
+          )}
+          <span className="font-mono font-bold uppercase tracking-wider text-[9px] text-gray-500">
+            {isStreaming 
+              ? `Ragionamento in corso... (${activeThinkingTime || '0.0'}s)` 
+              : `Ragionamento completato ${thinkingTime ? `(${thinkingTime}s)` : ''}`
+            }
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          {isStreaming && (
+            <span className="text-[8px] font-mono text-blue-500 animate-pulse font-bold tracking-wider">
+              AGENTE ATTIVO
+            </span>
+          )}
+          <svg 
+            viewBox="0 0 24 24" 
+            fill="none" 
+            stroke="currentColor" 
+            strokeWidth="2.5" 
+            strokeLinecap="round" 
+            strokeLinejoin="round" 
+            className={`w-3 h-3 transform transition-transform duration-200 text-gray-500 ${isOpen ? 'rotate-180' : ''}`}
+          >
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </div>
+      </div>
+
+      {/* Content */}
+      {isOpen && (
+        <div className="p-4 border-t border-gray-200/50 bg-white/40 text-[11px] space-y-3.5 max-h-[350px] overflow-y-auto custom-scrollbar">
+          {/* Active Tool Status (streaming) */}
+          {showActiveTool && (
+            <div className="flex items-center gap-2 text-[10px] text-green-700 bg-green-50 border border-green-200/40 px-3 py-2 rounded-lg font-mono animate-pulse-soft">
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-500 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-green-500"></span>
+              </span>
+              <span className="font-bold">Esecuzione tool:</span>
+              <span className="italic truncate">{activeToolLabel}</span>
+            </div>
+          )}
+
+          {/* Active Delegations (streaming) */}
+          {showActiveDelegations && (
+            <div className="space-y-1.5">
+              <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Sub-agenti attivi:</div>
+              {activeDelegations.map((del: any, dIdx: number) => {
+                if (del.status !== 'running') return null;
+                const color = AGENT_COLORS[del.agentType] || AGENT_COLORS.strategy;
+                return (
+                  <div key={dIdx} className="flex items-center gap-2 text-[10px] bg-white border border-gray-200 px-3 py-1.5 rounded-xl shadow-3xs animate-pulse-soft" style={{ borderLeft: `3px solid ${color.badge}` }}>
+                    <span className="text-xs">{color.icon}</span>
+                    <span className="font-bold" style={{ color: color.text }}>{del.agentLabel}:</span>
+                    <span className="text-gray-500 italic truncate max-w-[150px]">{del.task}</span>
+                    <span className="ml-auto text-[9px] text-blue-500 font-bold tracking-wider uppercase flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full bg-blue-500 animate-ping" />
+                      ⏳ Delegato
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Thought Text */}
+          {thinking && (
+            <div className="text-[11px] leading-relaxed font-mono whitespace-pre-wrap text-gray-700 bg-gray-55/50 p-3 rounded-lg border border-gray-200/50 border-l-2 border-l-blue-400">
+              {thinking}
+            </div>
+          )}
+
+          {/* Executed Tools */}
+          {hasTools && (
+            <div className="space-y-2">
+              <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Strumenti eseguiti:</div>
+              {tools.map((t, i) => (
+                <ToolItem key={i} tool={t} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CoFounderPage() {
   const [cofounderName, setCofounderName] = useState('coFounder');
   const [cofounderInput, setCofounderInput] = useState('');
@@ -1164,6 +1354,7 @@ export default function CoFounderPage() {
       id: newId,
       title: 'Nuova Conversazione',
       messages: [welcomeMsg],
+      todos: [],
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1270,13 +1461,16 @@ export default function CoFounderPage() {
 
   const saveChatForId = async (id: string, msgs: CofounderMessage[], updatedTitle?: string) => {
     try {
+      const disc = discussions.find(d => d.id === id);
+      const currentTodos = disc ? disc.todos : [];
       await fetch('/api/demo/cofounder/discussions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           id,
           messages: msgs,
-          title: updatedTitle
+          title: updatedTitle,
+          todos: currentTodos
         })
       });
     } catch (err) {
@@ -1412,6 +1606,7 @@ export default function CoFounderPage() {
           modelId: selectedModel,
           settings,
           discussionId: currentActiveId,
+          todos: discussions.find(d => d.id === currentActiveId)?.todos || []
         }),
         signal: controller.signal
       });
@@ -1484,6 +1679,21 @@ export default function CoFounderPage() {
               }));
             } else if (parsed.type === 'tool_start') {
               setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: payload.label } : d));
+            } else if (parsed.type === 'tool_end') {
+              const completedTool = payload;
+              if (!replyTools.some(t => t.name === completedTool.name && JSON.stringify(t.arguments) === JSON.stringify(completedTool.arguments))) {
+                replyTools.push(completedTool);
+              }
+              setDiscussions(prev => prev.map(d => {
+                if (d.id === currentActiveId) {
+                  const updatedDisc = { ...d, activeToolLabel: null };
+                  if (completedTool.name === 'todo' && completedTool.result?.todos) {
+                    updatedDisc.todos = completedTool.result.todos;
+                  }
+                  return updatedDisc;
+                }
+                return d;
+              }));
             } else if (parsed.type === 'tool_run') {
               setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: null } : d));
             } else if (parsed.type === 'delegating') {
@@ -1501,7 +1711,16 @@ export default function CoFounderPage() {
               replyDelegations = payload.delegations || [];
               replySuggestion = payload.agentSuggestion;
               thinkingTimeVal = ((Date.now() - startTime) / 1000).toFixed(1);
-              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: null } : d));
+              setDiscussions(prev => prev.map(d => {
+                if (d.id === currentActiveId) {
+                  return {
+                    ...d,
+                    activeToolLabel: null,
+                    todos: payload.todos || d.todos
+                  };
+                }
+                return d;
+              }));
             } else if (parsed.type === 'error') {
               setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: null } : d));
               throw new Error(payload);
@@ -1845,6 +2064,56 @@ export default function CoFounderPage() {
             </div>
           )}
 
+          {/* Roadmap di Sessione Card */}
+          {activeDiscussionId && (
+            (() => {
+              const activeDisc = discussions.find(d => d.id === activeDiscussionId);
+              const todos = activeDisc?.todos || [];
+
+              return (
+                <div className="p-4 rounded-xl border border-[#E8EAED] space-y-3" style={{ background: '#FAFAFA' }}>
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">Roadmap di Sessione</h3>
+                    {todos.length > 0 && (
+                      <span className="text-[10px] bg-[#E8F0FE] text-[#1A73E8] px-1.5 py-0.5 rounded-full font-semibold">
+                        {todos.filter((t: any) => t.status === 'completed').length}/{todos.length}
+                      </span>
+                    )}
+                  </div>
+                  {todos.length === 0 ? (
+                    <p className="text-[11px] text-[#5F6368] italic leading-normal">
+                      Nessun task attivo. Chiedi un'analisi complessa o una roadmap al Co-Founder per iniziare.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+                      {todos.map((todo: any) => {
+                        let statusIcon = '⬜';
+                        let statusClass = 'text-[#5F6368]';
+                        if (todo.status === 'in_progress') {
+                          statusIcon = '⏳';
+                          statusClass = 'text-[#1A73E8] font-medium animate-pulse';
+                        } else if (todo.status === 'completed') {
+                          statusIcon = '✅';
+                          statusClass = 'text-[#137333] line-through decoration-1 opacity-75';
+                        } else if (todo.status === 'cancelled') {
+                          statusIcon = '❌';
+                          statusClass = 'text-[#C5221F] line-through opacity-50';
+                        }
+
+                        return (
+                          <div key={todo.id} className="flex items-start gap-2 text-xs leading-tight">
+                            <span className="text-[14px] flex-shrink-0 select-none">{statusIcon}</span>
+                            <span className={statusClass}>{todo.content}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })()
+          )}
+
           <div className="p-4 rounded-xl border border-[#E8EAED]" style={{ background: '#FAFAFA' }}>
             <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider mb-2">Comandi Rapidi</h3>
             <div className="space-y-1">
@@ -1937,47 +2206,16 @@ export default function CoFounderPage() {
                   }
                 </div>
 
-                {msg.role === 'assistant' && (msg.thinking || (msg.tools && msg.tools.length > 0)) && (
-                  <details 
-                    key={msg.isStreaming ? 'open' : 'closed'}
-                    className="group mb-3 mt-3 border border-[#DADCE0] rounded-xl bg-[#F8F9FA]/80 backdrop-blur-sm shadow-[0_2px_8px_rgba(0,0,0,0.04)] overflow-hidden w-full transition-all duration-300"
-                    open={msg.isStreaming}
-                  >
-                    <summary className="list-none flex items-center justify-between px-4 py-2.5 text-[10px] font-mono text-[#5F6368] cursor-pointer select-none hover:bg-[#F1F3F4]/50 transition-colors focus:outline-none">
-                      <div className="flex items-center gap-2">
-                        <span className="relative flex h-2 w-2">
-                          <span className={`animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1A73E8] opacity-75 ${!msg.isStreaming && 'hidden'}`}></span>
-                          <span className={`relative inline-flex rounded-full h-2 w-2 bg-[#1A73E8] ${!msg.isStreaming && 'bg-[#9AA0AC]'}`}></span>
-                        </span>
-                        <span className="font-semibold uppercase tracking-wider text-[10px]">
-                          {msg.isStreaming ? 'Ragionamento in corso...' : `Ragionamento completato ${msg.thinkingTime ? `(${msg.thinkingTime}s)` : ''}`}
-                        </span>
-                      </div>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" 
-                        className="w-3 h-3 transform group-open:rotate-180 transition-transform duration-200 text-[#70757a]"
-                      >
-                        <polyline points="6 9 12 15 18 9"></polyline>
-                      </svg>
-                    </summary>
-                    <div className="p-4 border-t border-[#E8EAED]/60 bg-white/50 text-[10px] space-y-2.5 max-h-[400px] overflow-y-auto custom-scrollbar">
-                      {msg.thinking && (
-                        <div className="text-[11px] leading-relaxed font-mono whitespace-pre-wrap text-[#3C4043] bg-white/60 p-3 rounded-lg border border-[#E8EAED] mb-3">
-                          {msg.thinking}
-                        </div>
-                      )}
-                      {msg.tools && msg.tools.map((t, i) => (
-                        <div key={i} className={`border border-[#DADCE0] ${t.success ? 'border-l-[3px] border-l-[#34A853]' : 'border-l-[3px] border-l-[#EA4335]'} rounded-r-lg p-2.5 space-y-2 bg-white/60`}>
-                          <div className="flex items-center justify-between font-mono text-[9px]">
-                            <span className="text-[#1A73E8]">🔧 {t.name}</span>
-                            <span className={t.success ? 'text-[#34A853]' : 'text-[#EA4335]'}>
-                              {t.success ? 'SUCCESS' : 'FAILURE'}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-[#3C4043] font-medium">{t.details}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </details>
+                {msg.role === 'assistant' && (
+                  <ThinkingContainer
+                    thinking={msg.thinking}
+                    tools={msg.tools}
+                    isStreaming={msg.isStreaming}
+                    thinkingTime={msg.thinkingTime}
+                    activeToolLabel={msg.isStreaming ? activeToolLabel : null}
+                    activeDelegations={msg.isStreaming ? activeDelegations : []}
+                    activeThinkingTime={activeThinkingTime}
+                  />
                 )}
 
                 {msg.role === 'assistant' && msg.delegations && msg.delegations.length > 0 && (
@@ -2046,43 +2284,7 @@ export default function CoFounderPage() {
             </div>
           ))}
 
-          {/* Thinking / Streaming Indicator */}
-          {cofounderLoading && (
-            <div className="flex flex-col items-start space-y-2.5 p-4 rounded-2xl border border-white/40 bg-white/60 backdrop-blur-md shadow-[0_8px_32px_rgba(0,0,0,0.06)] max-w-md animate-pulse-soft ml-0">
-              <div className="flex items-center gap-2 text-xs font-semibold text-[#1A73E8]">
-                <span className="relative flex h-2 w-2">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#1A73E8] opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1A73E8]"></span>
-                </span>
-                <span>CoFounder attivo ({activeThinkingTime}s)</span>
-              </div>
 
-              {activeToolLabel && (
-                <div className="flex items-center gap-2 text-[10px] text-[#34A853] bg-[#E6F4EA]/80 border border-[#34A853]/20 px-3 py-1 rounded-full font-mono">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#34A853] animate-pulse" />
-                  <span>{activeToolLabel}</span>
-                </div>
-              )}
-
-              {activeDelegations.length > 0 && (
-                <div className="space-y-1.5 w-full">
-                  {activeDelegations.map((del: any, dIdx: number) => {
-                    const color = AGENT_COLORS[del.agentType] || AGENT_COLORS.strategy;
-                    return (
-                      <div key={dIdx} className="flex items-center gap-2 text-[10px] bg-white/70 border border-[#E8EAED] px-3 py-1.5 rounded-xl max-w-sm shadow-xs">
-                        <span className="text-xs">{color.icon}</span>
-                        <span className="font-bold" style={{ color: color.text }}>{del.agentLabel}:</span>
-                        <span className="text-[#5F6368] italic truncate max-w-[150px]">{del.task}</span>
-                        <span className="ml-auto text-[9px] text-[#1A73E8] font-bold tracking-wider uppercase">
-                          {del.status === 'running' ? '⏳ Delegato' : '✅ Completato'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
 
           {/* Empty / Starter prompts view */}
           {cofounderMessages.length <= 1 && !cofounderLoading && (

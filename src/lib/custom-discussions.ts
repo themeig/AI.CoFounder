@@ -5,6 +5,7 @@ export interface Discussion {
   id: string;
   title: string;
   messages: any[];
+  todos?: any[];
   createdAt: string;
   updatedAt: string;
 }

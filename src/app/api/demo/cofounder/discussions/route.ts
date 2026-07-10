@@ -15,7 +15,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { id, title, messages } = body;
+    const { id, title, messages, todos } = body;
 
     if (!id) {
       return NextResponse.json({ error: "Missing discussion id" }, { status: 400 });
@@ -27,12 +27,16 @@ export async function POST(req: Request) {
     if (target) {
       target.title = title || target.title;
       target.messages = messages || target.messages;
+      if (todos !== undefined) {
+        target.todos = todos;
+      }
       target.updatedAt = new Date().toISOString();
     } else {
       const newDisc: Discussion = {
         id,
         title: title || "Nuova Conversazione",
         messages: messages || [],
+        todos: todos || [],
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       };
