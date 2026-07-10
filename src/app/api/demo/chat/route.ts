@@ -789,6 +789,10 @@ ${matchedPatterns.map((p: any) => {
 - Non dire mai all'utente che non hai accesso in tempo reale a internet o che non puoi leggere le notizie. Se ti viene chiesto di cercare notizie (es: ANSA o ultime novità), usa 'webSearch' per trovare i link pertinenti, e subito dopo usa 'readWebPage' sull'URL per estrarre e riportare i titoli delle notizie di oggi.`;
           }
 
+          const selectedModel = modelId || DEFAULT_MODEL;
+          const modelInfo = findModel(selectedModel);
+          const modelToUse = modelInfo ? modelInfo.id : selectedModel;
+
           const basePrompt = (agentConfig.settings as any)?.systemPrompt || getSystemPrompt(agentType);
           const systemPrompt = `${basePrompt}
 
@@ -806,6 +810,7 @@ ${toolsSection}
 ${rulesSection}
 - REASONING LOOP (OBBLIGATORIO): Prima di formulare qualsiasi risposta o prima di richiedere l'uso di uno strumento, devi analizzare la situazione ed elaborare il tuo ragionamento all'interno dei tag <thought>...</thought>.
 - CONTROLLO OUTPUT (CRITICO): Se stai chiamando uno strumento (tool), NON scrivere nulla al di fuori dei tag <thought>...</thought>. Solo quando hai finito di usare gli strumenti e sei pronto per la risposta finale rivolta al founder, scriverai il testo della risposta finale al di fuori dei tag <thought>...</thought>. Tutto ciò che è ragionamento intermedio o spiegazione del tool deve stare dentro i tag di pensiero per non essere mostrato direttamente al founder.
+- IDENTITÀ LLM ATTUALE: Stai girando sul modello LLM "${modelInfo?.name || modelToUse}" (ID: "${modelToUse}"). Se ti viene chiesto che modello sei o quale intelligenza artificiale stai usando, rispondi basandoti su queste informazioni.
 - Fornisci consigli pratici e specifici per la situazione attuale della startup. Sii conciso ma esaustivo.`;
 
           const apiMessages = [
@@ -813,10 +818,6 @@ ${rulesSection}
             ...historyMessages,
             { role: "user", content: message },
           ];
-
-          const selectedModel = modelId || DEFAULT_MODEL;
-          const modelInfo = findModel(selectedModel);
-          const modelToUse = modelInfo ? modelInfo.id : selectedModel;
 
           // Define Tools dynamically
           const tools: any[] = [];

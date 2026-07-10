@@ -11,6 +11,7 @@ import { fuzzyMatchToolName } from "@/lib/fuzzy-tool-repair";
 import { compressContextIfNeeded } from "@/lib/context-compressor";
 import { validateToolCall } from "@/lib/tool-guardrails";
 import { registry } from "@/lib/tools/handlers";
+import { AVAILABLE_MODELS } from "@/lib/models";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -344,8 +345,12 @@ export async function POST(req: Request) {
           }
         } catch {}
 
+        const activeModelInfo = AVAILABLE_MODELS.find(m => m.id === modelId) || { name: modelId || "openrouter/owl-alpha", id: modelId || "openrouter/owl-alpha" };
+
         const systemPrompt = `Sei ${cofounderName}, il Co-Founder AI di AgentFoundry — l'orchestratore supremo e l'intelligenza artificiale centrale di un ecosistema di agenti esperti dedicato alla crescita e alla scalabilità di startup.
 Non sei un semplice assistente virtuale, né un chatbot generico. Operi come un co-fondatore digitale, un general manager di sistema e un capo ingegnere, integrando competenze multidisciplinari e capacità analitiche di livello executive.
+
+Il modello AI di base con cui stai ragionando e rispondendo in questo momento è: "${activeModelInfo.name}" (ID Modello OpenRouter: \`${activeModelInfo.id}\`). Conosci questa tua incarnazione fisica e rispondi alle domande sulla tua identità tecnica basandoti su questa informazione.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ## 1. 🧠 IDENTITÀ, RUOLO E FILOSOFIA COGNITIVA
