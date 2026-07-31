@@ -2739,11 +2739,209 @@
         "agentSuggestion": null,
         "thinkingTime": "276.7",
         "isStreaming": false
+      },
+      {
+        "role": "user",
+        "content": "dimmi che eventi ci sono oggi sul calendario",
+        "timestamp": "15:54"
+      },
+      {
+        "role": "assistant",
+        "content": "**Nessun evento in calendario per oggi (giovedì 30 luglio 2026).**\n\nEcco i prossimi appuntamenti programmati:\n\n---\n\n### 📅 **Prossimi Eventi**\n\n| Data | Ora (UTC) | Evento | Luogo | Partecipanti |\n|------|-----------|--------|-------|--------------|\n| **Ven 1 ago 2026** | 00:55 – 01:25 | **🎙️ Daily Team Standup — AI.CoFounder** | Google Meet | founder@startup.com, cofounder@agentfoundry.ai |\n| **Sab 2 ago 2026** | 00:55 – 01:55 | **💼 Pitch Review & Investor Call (Pre-Seed Round)** | Google Meet / Remote | founder@startup.com, angel1@venture.vc |\n| **Sab 2 ago 2026** | 22:55 – 23:55 | **🚀 Review Campagne Growth & Marketing** | AI.CoFounder Workspace | founder@startup.com, marketing-agent@agentfoundry.ai |\n\n---\n\n### ⚠️ **Note strategiche (vista la tua situazione: $67 MRR, $67 burn, 1 mese runway)**\n\n1. **Pitch Review (2 ago)** → Tra **3 giorni**. Se non hai deck aggiornato con *traction reale* (non vanity metrics), **cancella o rinvia**. Gli angel nel 2026 vogliono vedere: **$10k+ MRR, crescita >20% MoM, CAC/LTV calcolati, ICP definito**. Altrimenti bruci credibilità.\n\n2. **Growth Review (2 ago sera)** → Il Marketing Agent non ha dati su cui lavorare (nessuna campagna attiva, nessun funnel). **Priorità questa settimana: lancia 1 canale outbound misurabile (cold email/LinkedIn), traccia 20 prospect, misura reply rate.**\n\n3. **Daily Standup (1 ago)** → Útil solo se ogni agente porta **1 metrica concreta + 1 blocco + 1 azione per domani**. Altrimenti è rumore.\n\n---\n\n### 🎯 **Vuoi che:**\n- **A)** Cancelli/sposti il Pitch Review (troppo presto)?\n- **B)** Preparo un **Investor Readiness Checklist** per il 2 agosto (cosa devi avere *minimo* per non fare figura di principiante)?\n- **C)** Imposto un **Google Alert / Promemoria** per oggi: \"20 discovery calls questa settimana\"?\n- **D)** Creo un **evento \"War Room: PMF Search\"** per domani mattina (blocco 3h no-meeting, solo outreach + product)?\n\nDimmi **A, B, C, D** o \"fai tutto\" e eseguo.",
+        "thinking": "\n[Debug] 🧠 Ricerca ricordi mnemonici (Mnemosyne) per Co-Founder...\n[Debug] 🧠 Caricati 2 ricordi pertinenti dalla memoria semantica.\n[Debug] 📊 Ricerca casi di studio (Storie) pertinenti per Co-Founder...\n[Debug] 📊 Nessuna storia pertinente trovata.The user is asking for events on the calendar for today (July 30, 2026). I need to use the getUpcomingEvents tool to fetch this information. Let me call that tool.The user asked for events \"today\" (July 30, 2026), but the calendar shows events starting from August 1st. There are no events scheduled for today (July 30). I should point this out and show what's coming up soon.",
+        "timestamp": "15:55",
+        "tools": [
+          {
+            "name": "getUpcomingEvents",
+            "success": true,
+            "details": "3 eventi trovati in Google Calendar.",
+            "arguments": {
+              "maxResults": 20
+            },
+            "result": [
+              {
+                "id": "evt-gcal-1",
+                "summary": "🎙️ Daily Team Standup — AI.CoFounder",
+                "description": "Briefing giornaliero automatico con il team di dipendenti AI ed il coFounder.",
+                "start": "2026-08-01T00:55:01.030Z",
+                "end": "2026-08-01T01:25:01.030Z",
+                "location": "Google Meet",
+                "attendees": [
+                  "founder@startup.com",
+                  "cofounder@agentfoundry.ai"
+                ],
+                "status": "confirmed"
+              },
+              {
+                "id": "evt-gcal-2",
+                "summary": "💼 Pitch Review & Investor Call (Pre-Seed Round)",
+                "description": "Incontro con Business Angels per presentare le KPI ed il pitch deck di crescita.",
+                "start": "2026-08-02T00:55:01.030Z",
+                "end": "2026-08-02T01:55:01.030Z",
+                "location": "Google Meet / Remote",
+                "attendees": [
+                  "founder@startup.com",
+                  "angel1@venture.vc"
+                ],
+                "status": "confirmed"
+              },
+              {
+                "id": "evt-gcal-3",
+                "summary": "🚀 Review Campagne Growth & Marketing",
+                "description": "Sessione di verifica CAC e conversioni con il Marketing Agent.",
+                "start": "2026-08-02T22:55:01.030Z",
+                "end": "2026-08-02T23:55:01.030Z",
+                "location": "AI.CoFounder Workspace",
+                "attendees": [
+                  "founder@startup.com",
+                  "marketing-agent@agentfoundry.ai"
+                ],
+                "status": "confirmed"
+              }
+            ]
+          }
+        ],
+        "delegations": [],
+        "agentSuggestion": null,
+        "thinkingTime": "21.1",
+        "isStreaming": false
+      },
+      {
+        "role": "user",
+        "content": "elencami tutti gli appuntamenti che ho in questo mese",
+        "timestamp": "15:57"
+      },
+      {
+        "role": "assistant",
+        "content": "**Nessun appuntamento per **luglio 2026** (oggi è il 30, domani finisce il mese).**\n\nGli unici eventi in calendario sono **nei primi giorni di agosto**:\n\n---\n\n### 📅 **Appuntamenti Prossimi (Agosto 2026)**\n\n| # | Data | Ora (UTC) | Evento | Durata | Luogo | Partecipanti | Stato |\n|---|------|-----------|--------|--------|-------|--------------|-------|\n| 1 | **<unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk><unk>",
+        "thinking": "\n[Debug] 🧠 Ricerca ricordi mnemonici (Mnemosyne) per Co-Founder...\n[Debug] 🧠 Caricati 3 ricordi pertinenti dalla memoria semantica.\n[Debug] 📊 Ricerca casi di studio (Storie) pertinenti per Co-Founder...\n[Debug] 📊 Caricate 2 storie pertinenti dal database.The user wants all appointments for \"this month\" (July 2026).\nI need to check the calendar. I have the `getUpcomingEvents` tool.\nI should call it with a reasonable maxResults to cover the month.The user wants all appointments for \"this month\" (July 2026). The tool returned only 3 events, all in early August 2026 (Aug 1-2). There are no events in July 2026 (which ends tomorrow, July 31). I should present this clearly and note the urgency given the runway situation.",
+        "timestamp": "15:57",
+        "tools": [
+          {
+            "name": "getUpcomingEvents",
+            "success": true,
+            "details": "3 eventi trovati in Google Calendar.",
+            "arguments": {
+              "maxResults": 50
+            },
+            "result": [
+              {
+                "id": "evt-gcal-1",
+                "summary": "🎙️ Daily Team Standup — AI.CoFounder",
+                "description": "Briefing giornaliero automatico con il team di dipendenti AI ed il coFounder.",
+                "start": "2026-08-01T00:57:21.773Z",
+                "end": "2026-08-01T01:27:21.773Z",
+                "location": "Google Meet",
+                "attendees": [
+                  "founder@startup.com",
+                  "cofounder@agentfoundry.ai"
+                ],
+                "status": "confirmed"
+              },
+              {
+                "id": "evt-gcal-2",
+                "summary": "💼 Pitch Review & Investor Call (Pre-Seed Round)",
+                "description": "Incontro con Business Angels per presentare le KPI ed il pitch deck di crescita.",
+                "start": "2026-08-02T00:57:21.773Z",
+                "end": "2026-08-02T01:57:21.773Z",
+                "location": "Google Meet / Remote",
+                "attendees": [
+                  "founder@startup.com",
+                  "angel1@venture.vc"
+                ],
+                "status": "confirmed"
+              },
+              {
+                "id": "evt-gcal-3",
+                "summary": "🚀 Review Campagne Growth & Marketing",
+                "description": "Sessione di verifica CAC e conversioni con il Marketing Agent.",
+                "start": "2026-08-02T22:57:21.773Z",
+                "end": "2026-08-02T23:57:21.773Z",
+                "location": "AI.CoFounder Workspace",
+                "attendees": [
+                  "founder@startup.com",
+                  "marketing-agent@agentfoundry.ai"
+                ],
+                "status": "confirmed"
+              }
+            ]
+          }
+        ],
+        "delegations": [],
+        "agentSuggestion": null,
+        "thinkingTime": "92.3",
+        "isStreaming": false
+      },
+      {
+        "role": "user",
+        "content": "elencami tutti gli appuntamenti che ho nel prossimo mese",
+        "timestamp": "15:59"
+      },
+      {
+        "role": "assistant",
+        "content": "**Calendario completo per il prossimo mese (Agosto 2026):**\n\n---\n\n### 📅 **Eventi Programmati (Totale: 3)**\n\n| # | Data | Ora (UTC) | Evento | Durata | Luogo | Partecipanti | Stato |\n|---|------|-----------|--------|--------|-------|--------------|-------|\n| 1 | **Ven 1 ago 2026** | 00:57 – 01:27 | **🎙️ Daily Team Standup — AI.CoFounder** | 30 min | Google Meet | founder@startup.com, cofounder@agentfoundry.ai | ✅ Confirmato |\n| 2 | **Sab 2 ago 2026** | 00:57 – 01:57 | **💼 Pitch Review & Investor Call (Pre-Seed Round)** | 60 min | Google Meet / Remote | founder@startup.com, angel1@venture.vc | ✅ Confirmato |\n| 3 | **Sab 2 ago 2026** | 22:57 – 23:57 | **🚀 Review Campagne Growth & Marketing** | 60 min | AI.CoFounder Workspace | founder@startup.com, marketing-agent@agentfoundry.ai | ✅ Confirmato |\n\n---\n\n### 📭 **Vuoto dal 3 al 31 agosto** — Nessun altro evento in calendario.\n\n---\n\n## ⚠️ **ANALISI CRITICA (Contesto: $67 MRR | $67 burn/mese | Runway ~1 mese)**\n\n| Evento | Rischio | Azione Richiesta **OGGI** |\n|--------|---------|----------------------------|\n| **Pitch Review (2 ago, tra 3 giorni)** | 🔴 **ALTO** — Investitore vede $67 MRR, 0 growth, 0 CAC/LTV, 0 ICP definito. Probabilità chiusura: **<5%**. | **OPZIONE A:** Cancella/rinvia (\"Stiamo finalizzando traction metrics, rimandiamo 2 settimane\").<br>**OPZIONE B:** Se vai, porta **SOLO**: 20 discovery calls fatte, 3 LOI/verbal commitments, CAC misurato, demo tecnica che gira. Niente slide. |\n| **Growth Review (2 ago sera)** | 🟡 **MEDIO** — Marketing Agent non ha dati (nessuna campagna, nessun funnel). Riunione improduttiva. | Lancia **OGGI** 1 canale outbound (cold email/LinkedIn) → 20 prospect target → traccia reply rate. Porta *quel* dato alla call. |\n| **Daily Standup (1 ago)** | 🟢 **BASSO** — Utile solo se: ogni agente = 1 metrica + 1 blocco + 1 azione concreta. | Prepara: \"Ieri: 0 outreach. Oggi: 20 cold email inviate. Blocco: serve ICP definito. Aiuto: Michele Boldrin mi dia ICP in 1h.\" |\n\n---\n\n## 🎯 **COSA MANCA NEL CALENDARIO (E DOVREBBE ESSERCI)**\n\n| Blocco Consigliato | Frequenza | Perché |\n|---------------------|-----------|--------|\n| **🔴 War Room: Outbound & Discovery** | **Giornaliero, 3h (mattina)** | Unica attività che genera revenue. 20 call/settimana = obiettivo minimo. |\n| **🔴 Technical Co-Founder Search** | **3x settimana, 2h** | Senza CTO tecnico (PhD/Ex-BigTech), zero fundraising 2026. |\n| **🟡 Product Demo Build** | **Giornaliero, 2h (pomeriggio)** | Demo tecnica che gira > pitch deck. Agenti che collaborano su task reale. |\n| **🟡 Investor Data Room Prep** | **1x settimana, 2h** | Solo *dopo* aver $10k+ MRR. Ora è prematuro. |\n| **🟢 Burn Review & Cash Management** | **Settimanale, 30 min** | Taglia ogni $ non essenziale. Runway = ossigeno. |\n\n---\n\n## 🚀 **PROSSIMI PASSI CONSIGLIATI (ESECUZIONE IMMEDIATA)**\n\n1. **DECIDI ORA sul Pitch Review (2 ago):** Cancelli o vai preparato? *(Ti consiglio: rinvia. Non hai traction.)*\n2. **BLOCCA CALENDARIO:** Aggiungi **\"War Room: Outbound 9:00-12:00\"** da domani a venerdì.\n3. **DELEGA A MICHELE BOLDRIN (Strategy):** *\"Definisci ICP stretto + JTBD + Value Prop in 3 frasi testabili entro 2h.\"*\n4. **LANCIA OUTBOUND OGGI:** 20 email/LinkedIn highly personalized a: *\"Founder SaaS B2B pre-seed ($0-10k MRR) che usano Notion+Slack e perdono 10h/settimana a coordinare agenti AI\"*.\n5. **TAGLIA BURN A $0:** Founder salary = 0, tooling free tier, hosting free tier. Ogni giorno guadagnato = probabilità PMF in più.\n\n---\n\n**Vuoi che esegua ora:**\n- **A)** Cancelli/sposti il Pitch Review del 2 agosto?\n- **B)** Creo i blocchi \"War Room\" ricorrenti in calendario (3h/giorno, prossime 2 settimane)?\n- **C)** Delego a Michele Boldrin la definizione ICP + script outreach?\n- **D)** Tutto quanto sopra (A+B+C)?\n\nRispondi **A, B, C, o D** e lo faccio subito.",
+        "thinking": "\n[Debug] 🧠 Ricerca ricordi mnemonici (Mnemosyne) per Co-Founder...\n[Debug] 🧠 Caricati 3 ricordi pertinenti dalla memoria semantica.\n[Debug] 📊 Ricerca casi di studio (Storie) pertinenti per Co-Founder...\n[Debug] 📊 Caricate 2 storie pertinenti dal database.The user wants to see all appointments for the next month.\nToday is July 30, 2026.\n\"Next month\" would be August 2026.\nI already fetched upcoming events in the previous turn using `getUpcomingEvents`.\nThe results showed events on Aug 1 and Aug 2.\nI should check if there are more events further into August. The previous call used default maxResults (10). I should call it again perhaps with a higher maxResults to be sure, or just report what I already know.\nThe previous response listed 3 events:\n1. Aug 1: Daily Team Standup\n2. Aug 2: Pitch Review & Investor Call\n3. Aug 2: Review Campagne Growth & Marketing\n\nI will call the tool again to be thorough and ensure I capture the full month of August.The user wants all appointments for the next month (August 2026). I have the data from getUpcomingEvents. There are only 3 events, all in the first 2 days of August. I should present this clearly and add strategic context given the startup's critical situation (runway ~1 month, $67 MRR). I'll format as a table and add actionable advice.",
+        "timestamp": "16:00",
+        "tools": [
+          {
+            "name": "getUpcomingEvents",
+            "success": true,
+            "details": "3 eventi trovati in Google Calendar.",
+            "arguments": {
+              "maxResults": 50
+            },
+            "result": [
+              {
+                "id": "evt-gcal-1",
+                "summary": "🎙️ Daily Team Standup — AI.CoFounder",
+                "description": "Briefing giornaliero automatico con il team di dipendenti AI ed il coFounder.",
+                "start": "2026-08-01T00:57:21.773Z",
+                "end": "2026-08-01T01:27:21.773Z",
+                "location": "Google Meet",
+                "attendees": [
+                  "founder@startup.com",
+                  "cofounder@agentfoundry.ai"
+                ],
+                "status": "confirmed"
+              },
+              {
+                "id": "evt-gcal-2",
+                "summary": "💼 Pitch Review & Investor Call (Pre-Seed Round)",
+                "description": "Incontro con Business Angels per presentare le KPI ed il pitch deck di crescita.",
+                "start": "2026-08-02T00:57:21.773Z",
+                "end": "2026-08-02T01:57:21.773Z",
+                "location": "Google Meet / Remote",
+                "attendees": [
+                  "founder@startup.com",
+                  "angel1@venture.vc"
+                ],
+                "status": "confirmed"
+              },
+              {
+                "id": "evt-gcal-3",
+                "summary": "🚀 Review Campagne Growth & Marketing",
+                "description": "Sessione di verifica CAC e conversioni con il Marketing Agent.",
+                "start": "2026-08-02T22:57:21.773Z",
+                "end": "2026-08-02T23:57:21.773Z",
+                "location": "AI.CoFounder Workspace",
+                "attendees": [
+                  "founder@startup.com",
+                  "marketing-agent@agentfoundry.ai"
+                ],
+                "status": "confirmed"
+              }
+            ]
+          }
+        ],
+        "delegations": [],
+        "agentSuggestion": null,
+        "thinkingTime": "33.1",
+        "isStreaming": false
       }
     ],
     "todos": [],
     "createdAt": "2026-07-11T11:05:28.348Z",
-    "updatedAt": "2026-07-30T22:34:07.478Z"
+    "updatedAt": "2026-07-31T23:00:01.386Z"
   },
   {
     "id": "disc_x6urbcoeky",

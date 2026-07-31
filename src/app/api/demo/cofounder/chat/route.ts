@@ -193,7 +193,14 @@ export async function POST(req: Request) {
         }
 
         const reqBody = await req.json();
-        const { messages, cofounderName = "coFounder", modelId, settings, discussionId, todos = [] } = reqBody;
+        let { messages, cofounderName = "coFounder", modelId, settings, discussionId, todos = [] } = reqBody;
+        if (!Array.isArray(messages)) {
+          if (typeof reqBody.message === "string") {
+            messages = [{ role: "user", content: reqBody.message }];
+          } else {
+            messages = [];
+          }
+        }
         let currentTodos = todos;
 
         // Load startup
