@@ -645,6 +645,24 @@ const getAvailableTools = (lang: string) => [
       ? 'Retrieves complete qualitative details, success factors, and failure modes for a specific pattern ID.'
       : 'Recupera i dettagli completi (analisi qualitativa, fattori di successo, checklist errori) di una specifica conoscenza o pattern inserendo il suo ID.',
     parameters: lang === 'en' ? 'patternId: string (pattern ID)' : 'patternId: string (l\'ID del pattern)'
+  },
+  {
+    name: 'getUpcomingEvents',
+    label: lang === 'en' ? 'Google Calendar Reader' : 'Leggi Google Calendar',
+    icon: '📅',
+    defaultDescription: lang === 'en'
+      ? 'Fetches upcoming events and meetings scheduled on Google Calendar.'
+      : 'Recupera i prossimi eventi e riunioni programmati nel Google Calendar della startup.',
+    parameters: lang === 'en' ? 'maxResults?: integer' : 'maxResults?: integer'
+  },
+  {
+    name: 'createCalendarEvent',
+    label: lang === 'en' ? 'Google Calendar Event Creator' : 'Crea Evento Google Calendar',
+    icon: '📆',
+    defaultDescription: lang === 'en'
+      ? 'Schedules and creates new events or meetings directly on Google Calendar.'
+      : 'Pianifica e crea un nuovo evento o riunione nel Google Calendar della startup.',
+    parameters: lang === 'en' ? 'summary: string, startIso: string, durationMinutes?: number' : 'summary: string, startIso: string, durationMinutes?: number'
   }
 ];
 

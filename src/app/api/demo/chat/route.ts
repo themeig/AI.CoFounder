@@ -753,6 +753,12 @@ ${matchedPatterns.map((p: any) => {
           if (enabledTools.includes("get_knowledge_pattern_details")) {
             toolDescItems.push(`- 'get_knowledge_pattern_details': ${customDescriptions.get_knowledge_pattern_details || "Approfondisce i dettagli di una specifica conoscenza o pattern."}`);
           }
+          if (enabledTools.includes("getUpcomingEvents")) {
+            toolDescItems.push(`- 'getUpcomingEvents': ${customDescriptions.getUpcomingEvents || "Recupera i prossimi eventi e riunioni programmati nel Google Calendar della startup."}`);
+          }
+          if (enabledTools.includes("createCalendarEvent")) {
+            toolDescItems.push(`- 'createCalendarEvent': ${customDescriptions.createCalendarEvent || "Pianifica e crea un nuovo evento o riunione nel Google Calendar della startup."}`);
+          }
           toolDescItems.push(`- 'requestInformationForm': Crea un modulo (form) interattivo con domande mirate per raccogliere dati o preferenze mancanti.`);
 
           const toolsSection = toolDescItems.length > 0
@@ -885,6 +891,44 @@ ${rulesSection}
                     url: { type: "string", description: "L'indirizzo URL completo della pagina da leggere (es: 'https://www.ansa.it/sito/notizie/topnews/index.shtml')." }
                   },
                   required: ["url"]
+                }
+              }
+            });
+          }
+
+          if (enabledTools.includes("getUpcomingEvents")) {
+            tools.push({
+              type: "function",
+              function: {
+                name: "getUpcomingEvents",
+                description: customDescriptions.getUpcomingEvents || "Recupera i prossimi eventi e riunioni programmati nel Google Calendar della startup.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    maxResults: { type: "integer", description: "Numero massimo di eventi da recuperare (default 10)." }
+                  }
+                }
+              }
+            });
+          }
+
+          if (enabledTools.includes("createCalendarEvent")) {
+            tools.push({
+              type: "function",
+              function: {
+                name: "createCalendarEvent",
+                description: customDescriptions.createCalendarEvent || "Pianifica e crea un nuovo evento o riunione nel Google Calendar della startup.",
+                parameters: {
+                  type: "object",
+                  properties: {
+                    summary: { type: "string", description: "Titolo dell'evento (es: 'Incontro Investor Angel', 'Sprint Review Tech')." },
+                    description: { type: "string", description: "Descrizione dettagliata dell'ordine del giorno o argomenti da trattare." },
+                    startIso: { type: "string", description: "Orario d'inizio in formato ISO string (es: '2026-07-31T14:30:00Z')." },
+                    durationMinutes: { type: "integer", description: "Durata dell'evento in minuti (default 30)." },
+                    location: { type: "string", description: "Luogo o link del meeting (es: 'Google Meet', 'Milano HQ')." },
+                    attendees: { type: "array", items: { type: "string" }, description: "Lista delle email dei partecipanti." }
+                  },
+                  required: ["summary", "startIso"]
                 }
               }
             });
