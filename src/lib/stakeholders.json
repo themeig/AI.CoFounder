@@ -1,0 +1,98 @@
+{
+  "nodes": [
+    {
+      "id": "hub",
+      "label": "TechFlow",
+      "cat": "hub",
+      "x": 0,
+      "y": 0,
+      "expanded": true
+    },
+    {
+      "id": "investitori",
+      "label": "Investitori",
+      "cat": "investitori",
+      "x": 180,
+      "y": 0,
+      "expanded": true
+    },
+    {
+      "id": "advisor",
+      "label": "Advisor",
+      "cat": "advisor",
+      "x": 90,
+      "y": 156,
+      "expanded": true
+    },
+    {
+      "id": "team",
+      "label": "Team",
+      "cat": "team",
+      "x": -91,
+      "y": 156,
+      "expanded": true
+    },
+    {
+      "id": "clienti",
+      "label": "Clienti",
+      "cat": "clienti",
+      "x": -180,
+      "y": 0,
+      "expanded": true
+    },
+    {
+      "id": "fornitori",
+      "label": "Fornitori",
+      "cat": "fornitori",
+      "x": -90,
+      "y": -156,
+      "expanded": true
+    },
+    {
+      "id": "partner",
+      "label": "Partner",
+      "cat": "partner",
+      "x": 90,
+      "y": -156,
+      "expanded": true
+    },
+    {
+      "id": "node-1785455811294",
+      "label": "llòò",
+      "cat": "team",
+      "x": -433,
+      "y": -195,
+      "expanded": true
+    }
+  ],
+  "edges": [
+    {
+      "a": "hub",
+      "b": "investitori"
+    },
+    {
+      "a": "hub",
+      "b": "advisor"
+    },
+    {
+      "a": "hub",
+      "b": "team"
+    },
+    {
+      "a": "hub",
+      "b": "clienti"
+    },
+    {
+      "a": "hub",
+      "b": "fornitori"
+    },
+    {
+      "a": "hub",
+      "b": "partner"
+    },
+    {
+      "a": "hub",
+      "b": "node-1785455811294"
+    }
+  ]
+}

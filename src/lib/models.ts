@@ -8,86 +8,71 @@ export interface ModelInfo {
   free: boolean;
   speed: 'fast' | 'medium' | 'slow';
   quality: 'basic' | 'good' | 'excellent';
+  provider?: 'openrouter' | 'openai' | 'ollama' | 'custom';
+  baseUrl?: string;
+  apiKey?: string;
 }
 
 export const AVAILABLE_MODELS: ModelInfo[] = [
   // === FREE MODELS ===
   {
-    id: 'openrouter/owl-alpha',
-    name: 'OWL Alpha (Free)',
-    description: 'Modello versatile gratuito, ottimo per chat e ragionamento',
-    contextLength: 1048576,
-    free: true,
-    speed: 'medium',
-    quality: 'excellent',
-  },
-  {
-    id: 'tencent/hy3:free',
-    name: 'Tencent Hy3 (Free)',
-    description: 'Modello MoE da 295B per ragionamento e codifica (scadenza 21 Luglio 2026)',
-    contextLength: 256000,
-    free: true,
-    speed: 'medium',
-    quality: 'excellent',
-  },
-  {
     id: 'openrouter/free',
     name: 'Auto Free',
-    description: 'OpenRouter sceglie automaticamente il miglior modello gratuito',
+    description: 'OpenRouter automatically selects the best available free model',
     contextLength: 200000,
     free: true,
     speed: 'medium',
     quality: 'good',
   },
+  // === PAID / HIGH PERFORMANCE MODELS ===
   {
-    id: 'nex-agi/nex-n2-pro:free',
-    name: 'Nex N2 Pro (Free)',
-    description: 'Modello multilingua con buon ragionamento',
-    contextLength: 262144,
-    free: true,
-    speed: 'fast',
-    quality: 'good',
-  },
-  {
-    id: 'google/gemma-4-26b-a4b-it:free',
-    name: 'Gemma 4 26B (Free)',
-    description: 'Modello Google, buono per analisi e ragionamento',
-    contextLength: 262144,
-    free: true,
+    id: 'deepseek/deepseek-r1',
+    name: 'DeepSeek R1',
+    description: 'State-of-the-art open reasoning model',
+    contextLength: 64000,
+    free: false,
     speed: 'medium',
-    quality: 'good',
+    quality: 'excellent',
   },
-  // === PAID MODELS ===
   {
     id: 'deepseek/deepseek-chat',
     name: 'DeepSeek V3',
-    description: 'Modello cinese eccezionale, ottimo rapporto qualità/prezzo',
-    contextLength: 65536,
+    description: 'Fast, high performance general-purpose model',
+    contextLength: 64000,
     free: false,
     speed: 'fast',
     quality: 'excellent',
   },
   {
-    id: 'anthropic/claude-3-haiku',
-    name: 'Claude 3.5 Haiku',
-    description: 'Modello Anthropic veloce ed economico',
-    contextLength: 200000,
+    id: 'meta-llama/llama-3.3-70b-instruct',
+    name: 'Llama 3.3 70B Instruct',
+    description: 'Meta Flagship open model for complex logic and coding',
+    contextLength: 128000,
     free: false,
     speed: 'fast',
-    quality: 'good',
+    quality: 'excellent',
   },
   {
     id: 'openai/gpt-4o-mini',
     name: 'GPT-4o Mini',
-    description: 'Modello OpenAI economico e versatile',
-    contextLength: 131072,
+    description: 'Fast and versatile OpenAI model',
+    contextLength: 128000,
     free: false,
     speed: 'fast',
     quality: 'good',
   },
+  {
+    id: 'anthropic/claude-3.5-haiku',
+    name: 'Claude 3.5 Haiku',
+    description: 'Anthropic fast and intelligent model',
+    contextLength: 200000,
+    free: false,
+    speed: 'fast',
+    quality: 'excellent',
+  },
 ];
 
-export const DEFAULT_MODEL = 'openrouter/owl-alpha';
+export const DEFAULT_MODEL = 'openrouter/free';
 
 export function getModelInfo(id: string): ModelInfo | undefined {
   if (typeof window !== 'undefined') {

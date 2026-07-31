@@ -1,17 +1,19 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 
-const AGENT_CONFIGS: Record<string, { color: string; gradient: string; label: string; desc: string }> = {
-  strategy:   { color: '#1A73E8', gradient: 'linear-gradient(135deg, #1A73E8, #4285F4)', label: 'Strategy', desc: 'Analisi mercato & crescita' },
-  tech:       { color: '#34A853', gradient: 'linear-gradient(135deg, #34A853, #0F9D58)', label: 'Tech', desc: 'Sviluppo & architettura' },
-  finance:    { color: '#F9AB00', gradient: 'linear-gradient(135deg, #F9AB00, #F4B400)', label: 'Finance', desc: 'Runway, MRR & budget' },
-  marketing:  { color: '#EA4335', gradient: 'linear-gradient(135deg, #EA4335, #DB4437)', label: 'Marketing', desc: 'Lead generation & SEO' },
-  legal:      { color: '#9334E6', gradient: 'linear-gradient(135deg, #9334E6, #A855F7)', label: 'Legal', desc: 'Società, contratti & GDPR' },
-  operations: { color: '#17A2B8', gradient: 'linear-gradient(135deg, #17A2B8, #00ACC1)', label: 'Ops', desc: 'Processi, ticket & automation' },
-};
+const getAgentConfigs = (lang: string): Record<string, { color: string; gradient: string; label: string; desc: string }> => ({
+  strategy:   { color: '#1A73E8', gradient: 'linear-gradient(135deg, #1A73E8, #4285F4)', label: 'Strategy', desc: 'Market analysis & growth' },
+  tech:       { color: '#34A853', gradient: 'linear-gradient(135deg, #34A853, #0F9D58)', label: 'Tech', desc: 'Software development & architecture' },
+  finance:    { color: '#F9AB00', gradient: 'linear-gradient(135deg, #F9AB00, #F4B400)', label: 'Finance', desc: 'Runway, MRR & budget planning' },
+  marketing:  { color: '#EA4335', gradient: 'linear-gradient(135deg, #EA4335, #DB4437)', label: 'Marketing', desc: 'Lead generation & growth SEO' },
+  legal:      { color: '#9334E6', gradient: 'linear-gradient(135deg, #9334E6, #A855F7)', label: 'Legal', desc: 'Contracts, IP & GDPR compliance' },
+  operations: { color: '#17A2B8', gradient: 'linear-gradient(135deg, #17A2B8, #00ACC1)', label: 'Ops', desc: 'Process automation & ticketing' },
+});
 
 export default function StartupPage() {
+  const { t, language } = useTranslation();
   const [startup, setStartup] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
@@ -71,7 +73,7 @@ export default function StartupPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id: agentId, isActive: !currentStatus }),
       });
-      if (!res.ok) throw new Error("Impossibile aggiornare l'agente");
+      if (!res.ok) throw new Error("Failed to update agent");
       
       const startupRes = await fetch("/api/demo/startup");
       const startupData = await startupRes.json();
@@ -94,7 +96,7 @@ export default function StartupPage() {
         body: JSON.stringify({ status, notes }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Errore durante l'analisi");
+      if (!res.ok) throw new Error(data.error || "Analysis failed");
       setAnalysis(data.analysis);
       setNotes("");
       const startupRes = await fetch("/api/demo/startup");
@@ -114,7 +116,7 @@ export default function StartupPage() {
   );
 
   if (!startup) return (
-    <div className="p-8 text-center text-sm" style={{ color: '#5F6368' }}>Nessuna startup trovata.</div>
+    <div className="p-8 text-center text-sm" style={{ color: '#5F6368' }}>No startup found.</div>
   );
 
   // Synergy Score Calculations
@@ -163,7 +165,9 @@ export default function StartupPage() {
             {startup.name || 'Startup Workspace'}
           </h1>
           <p className="text-sm mt-1" style={{ color: '#5F6368' }}>
-            Gestisci le metriche, monitora le API in tempo reale e coordina il tuo team di agenti AI.
+            {language === 'en'
+              ? 'Manage core metrics, track real-time APIs, and coordinate your AI agent team.'
+              : 'Gestisci le metriche, monitora le API in tempo reale e coordina il tuo team di agenti AI.'}
           </p>
         </div>
       </div>
@@ -178,35 +182,35 @@ export default function StartupPage() {
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
             {[
               {
-                label: 'MRR (Revenue)',
+                label: 'MRR',
                 value: `$${(startup.mrr || 0).toLocaleString()}`,
                 color: '#1A73E8',
                 bg: '#E8F0FE',
-                source: stripeConnected ? 'Stripe API' : 'Manuale',
+                source: stripeConnected ? 'Stripe API' : (language === 'en' ? 'Manual' : 'Manuale'),
                 connected: stripeConnected
               },
               {
-                label: 'Active Users',
+                label: language === 'en' ? 'Active Users' : 'Utenti Attivi',
                 value: (startup.users || 0).toLocaleString(),
                 color: '#34A853',
                 bg: '#E6F4EA',
-                source: mixpanelConnected ? 'Mixpanel API' : stripeConnected ? 'Stripe API' : 'Manuale',
+                source: mixpanelConnected ? 'Mixpanel API' : stripeConnected ? 'Stripe API' : (language === 'en' ? 'Manual' : 'Manuale'),
                 connected: mixpanelConnected || stripeConnected
               },
               {
-                label: 'Monthly Burn Rate',
+                label: language === 'en' ? 'Monthly Burn Rate' : 'Burn Rate Mensile',
                 value: `$${(startup.burnRate || 0).toLocaleString()}/mo`,
                 color: '#F9AB00',
                 bg: '#FEF7E0',
-                source: plaidConnected ? 'Plaid API' : 'Manuale',
+                source: plaidConnected ? 'Plaid API' : (language === 'en' ? 'Manual' : 'Manuale'),
                 connected: plaidConnected
               },
               {
-                label: 'Runway (Life)',
-                value: `${startup.runway || 0} mesi`,
+                label: language === 'en' ? 'Runway' : 'Runway',
+                value: `${startup.runway || 0} ${language === 'en' ? 'months' : 'mesi'}`,
                 color: '#EA4335',
                 bg: '#FCE8E6',
-                source: plaidConnected ? 'Plaid API' : 'Calcolato',
+                source: plaidConnected ? 'Plaid API' : (language === 'en' ? 'Calculated' : 'Calcolato'),
                 connected: plaidConnected
               },
             ].map(m => (
@@ -242,33 +246,41 @@ export default function StartupPage() {
           {/* Pivot / Causal Analyzer Form */}
           <div className="rounded-2xl border border-[#E8EAED] overflow-hidden" style={{ background: '#FFFFFF', boxShadow: '0 1px 2px rgba(60,64,67,0.06)' }}>
             <div className="px-6 py-4" style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
-              <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>Registra un Pivot o Outcome</h2>
+              <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>
+                {language === 'en' ? 'Record a Pivot or Milestone Outcome' : 'Registra un Pivot o Outcome'}
+              </h2>
               <p className="text-xs" style={{ color: '#5F6368', marginTop: '2px' }}>
-                Fornisci all'OmniMemory Analyzer dettagli di eventi significativi per generare regole per il team di agenti.
+                {language === 'en'
+                  ? 'Provide event details to the OmniMemory Causal Analyzer to train your AI agent team.'
+                  : 'Fornisci all\'OmniMemory Analyzer dettagli di eventi significativi per generare regole per il team di agenti.'}
               </p>
             </div>
             <form onSubmit={handleSubmitOutcome} className="p-6 space-y-4">
               <div className="grid sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5F6368' }}>Esito dell'evento</label>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5F6368' }}>
+                    {language === 'en' ? 'Event Outcome Status' : "Esito dell'evento"}
+                  </label>
                   <select
                     value={status}
                     onChange={e => setStatus(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg text-xs focus:outline-none"
                     style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
                   >
-                    <option value="growing">Trazione / Crescita (Growing)</option>
-                    <option value="pivot">Pivot Strategico (Pivot)</option>
-                    <option value="stalled">Stallo / Difficoltà (Stalled)</option>
-                    <option value="failed">Interruzione Operazioni (Failed)</option>
+                    <option value="growing">{language === 'en' ? 'Traction / Growth' : 'Trazione / Crescita (Growing)'}</option>
+                    <option value="pivot">{language === 'en' ? 'Strategic Pivot' : 'Pivot Strategico (Pivot)'}</option>
+                    <option value="stalled">{language === 'en' ? 'Stalled / Struggling' : 'Stallo / Difficoltà (Stalled)'}</option>
+                    <option value="failed">{language === 'en' ? 'Operations Halted' : 'Interruzione Operazioni (Failed)'}</option>
                   </select>
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5F6368' }}>Data Rilevamento</label>
+                  <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5F6368' }}>
+                    {language === 'en' ? 'Recorded Date' : 'Data Rilevamento'}
+                  </label>
                   <input
                     type="text"
                     disabled
-                    value={new Date().toLocaleDateString()}
+                    value={new Date().toLocaleDateString(language === 'en' ? 'en-US' : 'it-IT')}
                     className="w-full px-3 py-2 rounded-lg text-xs"
                     style={{ background: '#F1F3F4', border: '1px solid #DADCE0', color: '#9AA0AC' }}
                   />
@@ -277,12 +289,14 @@ export default function StartupPage() {
 
               <div>
                 <label className="block text-xs font-semibold mb-1.5" style={{ color: '#5F6368' }}>
-                  Causal Log (Cosa è successo e perché)
+                  {language === 'en' ? 'Causal Log (What happened and why)' : 'Causal Log (Cosa è successo e perché)'}
                 </label>
                 <textarea
                   value={notes}
                   onChange={e => setNotes(e.target.value)}
-                  placeholder="Descrivi l'evento: ad es. 'Abbiamo lanciato una campagna ADS focalizzata sugli sviluppatori riducendo il CAC del 30% ma la retention a 30 giorni è scesa al 12% a causa di un onboarding difettoso...'"
+                  placeholder={language === 'en'
+                    ? "Describe the milestone or outcome: e.g. 'We launched a developer-focused ad campaign reducing CAC by 30%, but 30-day retention dropped to 12% due to onboarding friction...'"
+                    : "Descrivi l'evento: ad es. 'Abbiamo lanciato una campagna ADS focalizzata sugli sviluppatori riducendo il CAC del 30% ma la retention a 30 giorni è scesa al 12% a causa di un onboarding difettoso...'"}
                   rows={4}
                   required
                   className="w-full px-3 py-2 rounded-lg text-xs focus:outline-none"
@@ -306,12 +320,12 @@ export default function StartupPage() {
                 {submitting ? (
                   <>
                     <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Analisi OmniMemory...
+                    {language === 'en' ? 'OmniMemory Analysis...' : 'Analisi OmniMemory...'}
                   </>
                 ) : (
                   <>
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                    Esegui Causal Analysis
+                    {language === 'en' ? 'Run Causal Analysis' : 'Esegui Causal Analysis'}
                   </>
                 )}
               </button>
@@ -325,14 +339,16 @@ export default function StartupPage() {
                     Report OmniMemory: "{analysis.title}"
                   </h3>
                   <span className="px-2 py-0.5 rounded text-[8px] font-bold tracking-tight uppercase" style={{ background: '#D2E3FC', color: '#1A73E8' }}>
-                    Modello Aggiornato
+                    {language === 'en' ? 'Model Updated' : 'Modello Aggiornato'}
                   </span>
                 </div>
                 <p className="text-xs leading-relaxed whitespace-pre-wrap mb-4" style={{ color: '#3C4043' }}>{analysis.analysis}</p>
                 <div className="grid sm:grid-cols-2 gap-4">
                   {analysis.keyFactors?.length > 0 && (
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: '#137333' }}>Fattori di Successo</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: '#137333' }}>
+                        {language === 'en' ? 'Success Factors' : 'Fattori di Successo'}
+                      </p>
                       <div className="flex flex-wrap gap-1">
                         {analysis.keyFactors.map((f: string, i: number) => (
                           <span key={i} className="px-2 py-0.5 rounded text-[9px] font-semibold" style={{ background: '#E6F4EA', color: '#137333', border: '1px solid #CEEAD6' }}>{f}</span>
@@ -342,7 +358,9 @@ export default function StartupPage() {
                   )}
                   {analysis.failureModes?.length > 0 && (
                     <div>
-                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: '#C5221F' }}>Errori di Strategia Rilevati</p>
+                      <p className="text-[10px] font-bold uppercase tracking-wider mb-1.5" style={{ color: '#C5221F' }}>
+                        {language === 'en' ? 'Strategy Errors Detected' : 'Errori di Strategia Rilevati'}
+                      </p>
                       <div className="flex flex-wrap gap-1">
                         {analysis.failureModes.map((f: string, i: number) => (
                           <span key={i} className="px-2 py-0.5 rounded text-[9px] font-semibold" style={{ background: '#FCE8E6', color: '#C5221F', border: '1px solid #F7CECE' }}>{f}</span>
@@ -361,7 +379,9 @@ export default function StartupPage() {
           
           {/* Synergy Score Ring Gauge */}
           <div className="p-5 rounded-2xl border border-[#E8EAED]" style={{ background: '#FFFFFF', boxShadow: '0 1px 2px rgba(60,64,67,0.06)' }}>
-            <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>Sinergia Operativa Team</h2>
+            <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>
+              {language === 'en' ? 'Team Operational Synergy' : 'Sinergia Operativa Team'}
+            </h2>
             <div className="flex items-center gap-4 mt-4">
               <div className="relative w-16 h-16 flex items-center justify-center flex-shrink-0">
                 <svg className="w-full h-full transform -rotate-90">
@@ -372,12 +392,12 @@ export default function StartupPage() {
               </div>
               <div>
                 <p className="text-xs font-semibold" style={{ color: '#3C4043' }}>
-                  {activeCount} su 6 agenti attivati
+                  {activeCount} {language === 'en' ? 'of 6 agents activated' : 'su 6 agenti attivati'}
                 </p>
                 <p className="text-[11px] mt-1 leading-relaxed" style={{ color: '#5F6368' }}>
                   {synergyScore === 100 
-                    ? "Copertura strategica globale completata. Gli agenti coordineranno l'auto-analisi." 
-                    : "Attiva più agenti specialistici per sbloccare l'auto-analisi incrociata dei dati."}
+                    ? (language === 'en' ? "Full strategic coverage achieved. Agents will coordinate cross-analysis." : "Copertura strategica globale completata. Gli agenti coordineranno l'auto-analisi.")
+                    : (language === 'en' ? "Activate more specialist agents to unlock cross-data auto-analysis." : "Attiva più agenti specialistici per sbloccare l'auto-analisi incrociata dei dati.")}
                 </p>
               </div>
             </div>
@@ -386,11 +406,14 @@ export default function StartupPage() {
           {/* Revamped Team Agenti Hub */}
           <div className="rounded-2xl border border-[#E8EAED] overflow-hidden" style={{ background: '#FFFFFF', boxShadow: '0 1px 2px rgba(60,64,67,0.06)' }}>
             <div className="px-5 py-3.5" style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
-              <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>Team Agenti Specializzati</h2>
+              <h2 className="font-semibold text-sm" style={{ color: '#202124' }}>
+                {language === 'en' ? 'Specialized Agent Team' : 'Team Agenti Specializzati'}
+              </h2>
             </div>
             <div className="divide-y" style={{ borderColor: '#F1F3F4' }}>
               {startup.agentConfigs?.map((agent: any) => {
-                const cfg = AGENT_CONFIGS[agent.type] || { color: '#5F6368', gradient: 'linear-gradient(135deg, #5F6368, #9AA0AC)', label: agent.type, desc: 'Agente AI' };
+                const configs = getAgentConfigs(language);
+                const cfg = configs[agent.type] || { color: '#5F6368', gradient: 'linear-gradient(135deg, #5F6368, #9AA0AC)', label: agent.type, desc: language === 'en' ? 'AI Agent' : 'Agente AI' };
                 return (
                   <div key={agent.id} className="p-4 flex flex-col gap-3 transition-colors hover:bg-[#FAFBFB]">
                     <div className="flex items-start justify-between">
@@ -435,10 +458,10 @@ export default function StartupPage() {
                     <div className="flex items-center justify-between pt-1" style={{ borderTop: '1px dashed #F1F3F4' }}>
                       <div className="flex items-center gap-2.5">
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F1F3F4] text-[#5F6368] font-medium">
-                          💬 {agent.messageCount || 0} messaggi
+                          💬 {agent.messageCount || 0} {language === 'en' ? 'messages' : 'messaggi'}
                         </span>
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F4F7FE] text-[#1A73E8] font-medium">
-                          🧠 {agent.memoryCount || 0} ricordi
+                          🧠 {agent.memoryCount || 0} {language === 'en' ? 'memories' : 'ricordi'}
                         </span>
                       </div>
                       <a
@@ -446,7 +469,7 @@ export default function StartupPage() {
                         className="text-[10px] font-semibold hover:underline"
                         style={{ color: '#1A73E8' }}
                       >
-                        Apri Chat →
+                        {language === 'en' ? 'Open Chat →' : 'Apri Chat →'}
                       </a>
                     </div>
                   </div>
@@ -454,7 +477,9 @@ export default function StartupPage() {
               })}
               {(!startup.agentConfigs || startup.agentConfigs.length === 0) && (
                 <div className="p-5 text-center text-xs" style={{ color: '#9AA0AC' }}>
-                  Nessun agente registrato nel workspace. Vai alla sezione Agenti per inizializzare il team.
+                  {language === 'en'
+                    ? 'No agents registered in this workspace. Go to the Agents section to set up your team.'
+                    : 'Nessun agente registrato nel workspace. Vai alla sezione Agenti per inizializzare il team.'}
                 </div>
               )}
             </div>
@@ -464,3 +489,4 @@ export default function StartupPage() {
     </div>
   );
 }
+

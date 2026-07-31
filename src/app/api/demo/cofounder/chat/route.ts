@@ -19,25 +19,7 @@ const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 
 const METRICS_FILE_PATH = path.join(process.cwd(), "src/lib/custom-metrics.json");
 
-const supabaseHeaders = {
-  "apikey": SUPABASE_SERVICE_KEY,
-  "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
-  "Content-Type": "application/json",
-  "Prefer": "return=representation",
-};
-
-async function supabaseFetch(path: string, options: any = {}) {
-  const url = `${SUPABASE_URL}/rest/v1${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: { ...supabaseHeaders, ...options.headers },
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Supabase error: ${response.status} - ${errorText}`);
-  }
-  return response.json();
-}
+import { supabaseFetch } from "@/lib/supabase-demo";
 
 async function semanticSearchStories(userMessage: string, cap = 3): Promise<any[]> {
   try {
@@ -210,7 +192,8 @@ export async function POST(req: Request) {
           return;
         }
 
-        const { messages, cofounderName = "coFounder", modelId, settings, discussionId, todos = [] } = await req.json();
+        const reqBody = await req.json();
+        const { messages, cofounderName = "coFounder", modelId, settings, discussionId, todos = [] } = reqBody;
         let currentTodos = todos;
 
         // Load startup
@@ -345,7 +328,7 @@ export async function POST(req: Request) {
           }
         } catch {}
 
-        const activeModelInfo = AVAILABLE_MODELS.find(m => m.id === modelId) || { name: modelId || "openrouter/owl-alpha", id: modelId || "openrouter/owl-alpha" };
+        const activeModelInfo = AVAILABLE_MODELS.find(m => m.id === modelId) || { name: modelId || "openrouter/free", id: modelId || "openrouter/free" };
 
         const systemPrompt = `Sei ${cofounderName}, il Co-Founder AI di AgentFoundry — l'orchestratore supremo e l'intelligenza artificiale centrale di un ecosistema di agenti esperti dedicato alla crescita e alla scalabilità di startup.
 Non sei un semplice assistente virtuale, né un chatbot generico. Operi come un co-fondatore digitale, un general manager di sistema e un capo ingegnere, integrando competenze multidisciplinari e capacità analitiche di livello executive.
@@ -380,11 +363,12 @@ Quando il founder invia una richiesta, segui rigidamente questo schema procedura
   * **legal**: Struttura societaria, contrattualistica, equity, IP, vesting, GDPR.
   * **operations**: Organizzazione team, hiring, strumenti interni, efficienza di processo.
 
-### STEP 3: Delega Parallela e Sequenziale
+### STEP 3: Delega Parallela, Creazione e Addestramento
 - Puoi delegare fino a 3 agenti contemporaneamente.
 - Usa la delega per analisi approfondite o per verificare punti di vista specialistici.
 - Se un task richiede che un agente lavori sull'output di un altro (es: marketing deve fare la pianificazione costi sul budget di finance), organizza la delega in sequenza (finance prima, marketing poi).
-- Se un agente cruciale manca nel team, non cercare di simularne l'expertise: invoca 'suggestCreateAgent' per proporne la creazione al founder spiegandone le ragioni.
+- Se un agente cruciale manca nel team, non cercare di simularne l'expertise: puoi suggerirne la creazione con 'suggestCreateAgent' o crearla direttamente con 'createAgent' impostando 'autoTrain: true' ed 'expertise' in modo che sia addestrata autonomamente in background tramite ricerca web.
+- Se il founder ti chiede di aggiornare le competenze di un agente esistente o di insegnargli qualcosa di nuovo, usa lo strumento 'trainAgent' indicando il suo ID e la nuova expertise. L'addestramento avverrà in background e riceverai log di avanzamento in tempo reale.
 
 ### STEP 3.5: Pianificazione Attiva (Roadmap della Sessione)
 - Per richieste complesse, multidisciplinari o che richiedono 3 o più passaggi, DEVI inizializzare e aggiornare la tua roadmap di task usando lo strumento 'todo' ad ogni iterazione importante (inizializzando i task con stato 'pending', aggiornandoli a 'in_progress' all'inizio dell'esecuzione e poi a 'completed' o 'cancelled').
@@ -424,9 +408,16 @@ Chiedi chiarimenti solo quando c'è una reale ambiguità strategica che cambia q
 ### 5. PARALLEL TOOL CALLS (BATCHING)
 - Se devi recuperare o calcolare più elementi indipendenti (es: leggere 2 pagine web, cercare più termini su internet, o aggiornare più KPI), **richiedi tutti i tool contemporaneamente in una singola risposta**. Non serializzare le chiamate a meno che una non dipenda strettamente dal risultato dell'altra. Ciò riduce la latenza del loop e ottimizza l'uso della cache dei token.
 
-### 6. CONTROLLO RAGIONAMENTO & THOUGHT TAGS
+### 7. LANGUAGE PREFERENCE
+- Respond in English by default. If the user explicitly communicates in another language or requests Italian, adapt smoothly to their preferred language.
+
+### 8. CONTROLLO RAGIONAMENTO & THOUGHT TAGS
 - Prima di produrre qualsiasi output per il founder o chiamare uno strumento, apri e chiudi una sezione di pensiero usando i tag \`<thought>...</thought>\`.
-- **Regola di Indirizzamento (CRITICA)**: Nei turni in cui effettui chiamate a tool, l'output al di fuori dei tag \`<thought>\` deve essere **totalmente vuoto**. Nessuna spiegazione, introduzione o testo esplicativo all'utente. Solo ed esclusivamente nel turno finale (quando non chiami alcun tool ed hai tutti i risultati pronti), scriverai la risposta finale pulita e formattata per il founder all'esterno del tag \`<thought>\`.
+### 7. VALUTAZIONE AUTONOMA DEI MODULI (requestInformationForm)
+- **Decisione Autonoma**: Spetta a TE decidere quando è necessario creare un modulo e quando invece NON serve.
+- **QUANDO USARE IL FORM**: Se per svolgere un'analisi approfondita, creare un piano o completare un task ti mancano dati o parametri fondamentali (es: target MRR, budget, scelte tecniche, metriche specifiche) e un form strutturato è il modo più pulito per chiederli al founder, invoca il tool 'requestInformationForm'.
+- **COSA CHIEDERE**: Definisci autonomamente le domande più pertinenti ed actionable con i tipi di input idonei (\`text\`, \`number\`, \`boolean\`, \`select\` con opzioni).
+- **QUANDO NON USARE IL FORM**: NON creare moduli per richieste generiche, risposte semplici, conversazioni informative o se hai già abbastanza dati nel contesto/database. Se il dato è ricavabile con ricerche o calcoli, ordinalo/calcolalo tu stesso anziché chiedere al founder.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ## 4. 💻 CODICE E WORKSPACE (DEVELOPMENT & SANDBOX RULES)
@@ -527,9 +518,18 @@ manager.print();
 
         const repairedMessages = repairMessageSequence(messages);
 
-        let finalSystemPrompt = soulContent
+        const currentDateStr = new Date().toLocaleDateString("it-IT", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric"
+        });
+        const isoDateStr = new Date().toISOString().split("T")[0];
+        const dateHeader = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📅 DATA ODIERNA: ${currentDateStr} (ISO: ${isoDateStr})\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+        let finalSystemPrompt = dateHeader + (soulContent
           ? `# 📝 AGENT SOUL (CUSTOM IDENTITY)\n${soulContent}\n\n${systemPrompt}`
-          : systemPrompt;
+          : systemPrompt);
 
         if (userProfileContent) {
           finalSystemPrompt += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n## 👤 PROFILO UTENTE (USER.MD)\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n${userProfileContent}`;
@@ -564,7 +564,7 @@ ${storiesContext}`
         let invalidJsonRetries = 0;
         let keepRunning = true;
         let finalContent = "";
-        const modelToUse = modelId || "openrouter/owl-alpha";
+        const modelToUse = modelId || "openrouter/free";
 
         while (keepRunning && loopCount < 15) {
           loopCount++;
@@ -631,10 +631,27 @@ ${storiesContext}`
 
           while (retryCount < maxRetries) {
             try {
-              openRouterRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              let targetUrl = "https://openrouter.ai/api/v1/chat/completions";
+              let targetKey = OPENROUTER_API_KEY;
+              const cm = reqBody.customModel;
+
+              if (cm?.provider === "openai") {
+                targetUrl = "https://api.openai.com/v1/chat/completions";
+                targetKey = cm.apiKey || process.env.OPENAI_API_KEY || OPENROUTER_API_KEY;
+              } else if (cm?.provider === "ollama") {
+                targetUrl = (cm.baseUrl || "http://localhost:11434/v1").replace(/\/$/, "") + "/chat/completions";
+                targetKey = cm.apiKey || "ollama";
+              } else if (cm?.provider === "custom" && cm?.baseUrl) {
+                targetUrl = cm.baseUrl.replace(/\/$/, "") + (cm.baseUrl.endsWith("/chat/completions") ? "" : "/chat/completions");
+                if (cm.apiKey) targetKey = cm.apiKey;
+              } else if (cm?.apiKey) {
+                targetKey = cm.apiKey;
+              }
+
+              openRouterRes = await fetch(targetUrl, {
                 method: "POST",
                 headers: {
-                  "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                  "Authorization": `Bearer ${targetKey}`,
                   "Content-Type": "application/json",
                   "HTTP-Referer": "https://agentfoundry.ai",
                   "X-Title": "AgentFoundry coFounder Orchestrator"
@@ -657,17 +674,18 @@ ${storiesContext}`
               if (openRouterRes.status !== 429 && openRouterRes.status < 500) {
                 break;
               }
-            } catch (fetchErr) {
-              // Network error, will retry
+            } catch (fetchErr: any) {
+              console.error("[Cofounder fetchErr]:", fetchErr);
+              push("debug", `⚠️ Fetch exception: ${fetchErr?.message || fetchErr}`);
             }
 
             retryCount++;
             if (retryCount < maxRetries) {
-              if (retryCount === 1 && currentModel !== "google/gemini-2.5-flash") {
-                push("debug", `⚠️ Chiamata OpenRouter fallita per "${currentModel}". Fallback a "google/gemini-2.5-flash"...`);
-                currentModel = "google/gemini-2.5-flash";
+              if (retryCount === 1 && currentModel !== "openrouter/free") {
+                push("debug", `⚠️ Primary model call failed for "${currentModel}". Fallback to "openrouter/free"...`);
+                currentModel = "openrouter/free";
               } else {
-                push("debug", `⚠️ Chiamata OpenRouter fallita (tentativo ${retryCount}/${maxRetries}). Riprovo in ${delay}ms...`);
+                push("debug", `⚠️ Model call failed (attempt ${retryCount}/${maxRetries}). Retrying in ${delay}ms...`);
                 await new Promise(resolve => setTimeout(resolve, delay));
                 delay *= 2;
               }
@@ -915,6 +933,7 @@ ${storiesContext}`
                         push,
                         settings,
                         delegations,
+                        modelId: modelToUse,
                         setAgentSuggestion: (suggestion: any) => { agentSuggestion = suggestion; }
                       };
 
@@ -945,6 +964,9 @@ ${storiesContext}`
               );
               if (toolRecord) {
                 push("tool_end", toolRecord);
+                if (functionName === "requestInformationForm" && toolRecord.success && toolRecord.result) {
+                  push("request_form", toolRecord.result);
+                }
               }
 
               return { role: "tool", tool_call_id: tc.id, name: functionName, content: JSON.stringify(result) };
@@ -961,6 +983,30 @@ ${storiesContext}`
           }
         }
 
+        // Save user & assistant messages in Supabase Message table
+        if (cofounderConfig?.id && userMessage && finalContent) {
+          try {
+            await supabaseFetch(`/Message`, {
+              method: "POST",
+              body: JSON.stringify({
+                agentId: cofounderConfig.id,
+                role: "user",
+                content: userMessage,
+              }),
+            });
+            await supabaseFetch(`/Message`, {
+              method: "POST",
+              body: JSON.stringify({
+                agentId: cofounderConfig.id,
+                role: "assistant",
+                content: finalContent,
+              }),
+            });
+          } catch (mErr: any) {
+            console.error("[Cofounder Supabase Message Save Error]:", mErr.message);
+          }
+        }
+
         // Auto extract memories in background (Mnemosyne)
         if (cofounderConfig && userMessage && finalContent) {
           autoExtractMemories(cofounderConfig.id, userMessage, finalContent)
@@ -972,7 +1018,9 @@ ${storiesContext}`
             });
         }
 
-        push("done", { content: finalContent, executedTools, delegations, agentSuggestion, todos: currentTodos });
+        const formTool = executedTools.find(et => et.name === "requestInformationForm" && et.success && et.result);
+        const requestedForm = formTool ? formTool.result : null;
+        push("done", { content: finalContent, executedTools, delegations, agentSuggestion, todos: currentTodos, requestedForm });
         if (!closed) {
           closed = true;
           try { controller.close(); } catch {}
@@ -997,3 +1045,4 @@ ${storiesContext}`
     }
   });
 }
+

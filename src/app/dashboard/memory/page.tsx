@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import { DEFAULT_APP_SETTINGS } from "@/lib/settings";
+import { useTranslation } from "@/lib/i18n/LanguageContext";
 
 interface Pattern {
   id: string; title: string; description: string; sector: string | null;
@@ -18,15 +19,15 @@ interface MemoryItem {
 }
 
 const CATEGORY_META: Record<string, { label: string; color: string; bg: string; border: string; keywords: string[] }> = {
-  identity:    { label: "Identità & Team",      color: "#9334E6", bg: "#F3E8FF", border: "#E9D5FF", keywords: ["nome","chiamo","ruolo","team","ceo","cto","founder"] },
-  business:    { label: "Business & Strategia", color: "#1A73E8", bg: "#E8F0FE", border: "#C5D9F9", keywords: ["business","mercato","target","strategia","b2b","saas","prodotto"] },
-  tech:        { label: "Tecnologia & Stack",    color: "#17A2B8", bg: "#E0F7FA", border: "#B2EBF2", keywords: ["tech","stack","react","database","api","architettura","backend"] },
-  finance:     { label: "Finanza & Budget",      color: "#34A853", bg: "#E6F4EA", border: "#CEEAD6", keywords: ["budget","revenue","funding","mrr","arr","profitto"] },
-  contacts:    { label: "Contatti & Link",       color: "#F9AB00", bg: "#FEF7E0", border: "#FDE293", keywords: ["email","linkedin","twitter","sito","url","contatto"] },
-  preferences: { label: "Preferenze & Stile",   color: "#EA4335", bg: "#FCE8E6", border: "#F7CECE", keywords: ["preferisce","piace","stile","ama","favorito"] },
-  decisions:   { label: "Decisioni & Pivot",    color: "#FF6D00", bg: "#FFF3E0", border: "#FFE0B2", keywords: ["decisione","deciso","pivot","cambiato","approvato"] },
-  milestones:  { label: "Milestone & Scadenze", color: "#00897B", bg: "#E0F2F1", border: "#B2DFDB", keywords: ["lancio","deadline","obiettivo","milestone","beta","release"] },
-  general:     { label: "Generali",             color: "#5F6368", bg: "#F1F3F4", border: "#E8EAED", keywords: [] },
+  identity:    { label: "Identity & Team",      color: "#9334E6", bg: "#F3E8FF", border: "#E9D5FF", keywords: ["name","i am","role","team","ceo","cto","founder"] },
+  business:    { label: "Business & Strategy", color: "#1A73E8", bg: "#E8F0FE", border: "#C5D9F9", keywords: ["business","market","target","strategy","b2b","saas","product"] },
+  tech:        { label: "Technology & Stack",    color: "#17A2B8", bg: "#E0F7FA", border: "#B2EBF2", keywords: ["tech","stack","react","database","api","architecture","backend"] },
+  finance:     { label: "Finance & Budget",      color: "#34A853", bg: "#E6F4EA", border: "#CEEAD6", keywords: ["budget","revenue","funding","mrr","arr","profit"] },
+  contacts:    { label: "Contacts & Links",       color: "#F9AB00", bg: "#FEF7E0", border: "#FDE293", keywords: ["email","linkedin","twitter","website","url","contact"] },
+  preferences: { label: "Preferences & Style",   color: "#EA4335", bg: "#FCE8E6", border: "#F7CECE", keywords: ["prefers","likes","style","loves","favorite"] },
+  decisions:   { label: "Decisions & Pivots",    color: "#FF6D00", bg: "#FFF3E0", border: "#FFE0B2", keywords: ["decision","decided","pivot","changed","approved"] },
+  milestones:  { label: "Milestones & Deadlines", color: "#00897B", bg: "#E0F2F1", border: "#B2DFDB", keywords: ["launch","deadline","goal","milestone","beta","release"] },
+  general:     { label: "General",             color: "#5F6368", bg: "#F1F3F4", border: "#E8EAED", keywords: [] },
 };
 
 function inferCategory(content: string): string {
@@ -62,7 +63,7 @@ function MemoryCard({ memory, onDelete }: { memory: MemoryItem; onDelete: (id: s
       onMouseLeave={e => (e.currentTarget.style.background = '#FAFAFA')}>
       <div className="w-2 h-2 rounded-full mt-2 flex-shrink-0"
         style={{ background: importanceColors[memory.importance] || '#9AA0AC' }}
-        title={`Importanza: ${memory.importance}/5`} />
+        title={`Importance: ${memory.importance}/5`} />
       <div className="flex-1 min-w-0">
         <p className="text-sm leading-relaxed" style={{ color: '#202124' }}>{memory.content}</p>
         <div className="flex flex-wrap items-center gap-2 mt-2">
@@ -74,10 +75,10 @@ function MemoryCard({ memory, onDelete }: { memory: MemoryItem; onDelete: (id: s
             color: memory.scope === 'global' ? '#9334E6' : '#1A73E8',
             borderColor: memory.scope === 'global' ? '#E9D5FF' : '#C5D9F9',
           }}>
-            {memory.scope === 'global' ? 'Globale' : 'Locale'}
+            {memory.scope === 'global' ? 'Global' : 'Local'}
           </span>
           <span className="text-[10px]" style={{ color: '#9AA0AC' }}>
-            {new Date(memory.createdAt).toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: 'numeric' })}
+            {new Date(memory.createdAt).toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' })}
           </span>
         </div>
       </div>
@@ -88,7 +89,7 @@ function MemoryCard({ memory, onDelete }: { memory: MemoryItem; onDelete: (id: s
         style={{ color: '#EA4335' }}
         onMouseEnter={e => (e.currentTarget.style.background = '#FCE8E6')}
         onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-        title="Elimina ricordo"
+        title="Delete memory"
       >
         <svg viewBox="0 0 24 24" fill="currentColor" className="w-3.5 h-3.5">
           <path d="M16 9v10H8V9h8m-1.5-6h-5l-1 1H5v2h14V4h-3.5l-1-1zM18 7H6v12c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7z"/>
@@ -145,7 +146,7 @@ function MemoryArtifactCard({ artifact, onDelete }: { artifact: any; onDelete: (
     setRunning(true);
     setActiveTab('logs');
     const timestamp = new Date().toLocaleTimeString();
-    setTerminalLogs(prev => [...prev, `> [${timestamp}] Esecuzione manuale...`]);
+    setTerminalLogs(prev => [...prev, `> [${timestamp}] Manual execution...`]);
     try {
       const res = await fetch('/api/demo/artifacts', {
         method: 'POST',
@@ -253,7 +254,7 @@ function MemoryArtifactCard({ artifact, onDelete }: { artifact: any; onDelete: (
         {/* Footer actions */}
         <div className="flex items-center justify-between border-t border-[#E8EAED] pt-3 text-[10px]">
           <span className="text-[#9AA0AC]">
-            Creato il: {new Date(artifact.createdAt).toLocaleDateString('it-IT')}
+            Created on: {new Date(artifact.createdAt).toLocaleDateString('en-US')}
           </span>
           {(artifact.language === 'python' || artifact.language === 'py' || artifact.language === 'typescript' || artifact.language === 'ts' || artifact.language === 'javascript' || artifact.language === 'js') && (
             <button
@@ -544,6 +545,7 @@ function PatternSectionGroup({ sectionKey, patterns, isOpen, onToggle }: {
 }
 
 export default function MemoryPage() {
+  const { t, language } = useTranslation();
   const [patterns, setPatterns] = useState<Pattern[]>([]);
   const [playbooks, setPlaybooks] = useState<Playbook[]>([]);
   const [stories, setStories] = useState<any[]>([]);
@@ -567,6 +569,16 @@ export default function MemoryPage() {
   const [artifacts, setArtifacts] = useState<any[]>([]);
   const [loadingArtifacts, setLoadingArtifacts] = useState(true);
   const [artifactSearchQuery, setArtifactSearchQuery] = useState("");
+
+  const TABS = [
+    { id: "mnemosyne", label: language === "en" ? "Memories" : "Ricordi", group: "memory" },
+    { id: "artifacts", label: language === "en" ? "Artifacts" : "Artefatti", group: "memory" },
+    { id: "mnemosyne-settings", label: language === "en" ? "Settings" : "Impostazioni", group: "memory" },
+    { id: "patterns", label: `Patterns (${patterns.length})`, group: "knowledge" },
+    { id: "playbooks", label: `Playbooks (${playbooks.length})`, group: "knowledge" },
+    { id: "stories", label: language === "en" ? `Stories (${stories.length})` : `Storie (${stories.length})`, group: "knowledge" },
+    { id: "knowledge-settings", label: language === "en" ? "Settings" : "Impostazioni", group: "knowledge" },
+  ] as const;
 
   const [memSettings, setMemSettings] = useState(DEFAULT_APP_SETTINGS.memorySettings);
   const [kbSettings, setKbSettings] = useState(DEFAULT_APP_SETTINGS.knowledgeSettings);
@@ -747,7 +759,7 @@ export default function MemoryPage() {
         if (a.status !== b.status) {
           return a.status === "success" ? -1 : 1;
         }
-        return a.title.localeCompare(b.title);
+        return (a.title || '').localeCompare(b.title || '');
       });
     }
     return groups;
@@ -778,15 +790,6 @@ export default function MemoryPage() {
     </div>
   );
 
-  const TABS = [
-    { id: "mnemosyne", label: "Ricordi", group: "memory" },
-    { id: "artifacts", label: "Artefatti", group: "memory" },
-    { id: "mnemosyne-settings", label: "Impostazioni", group: "memory" },
-    { id: "patterns", label: `Pattern (${patterns.length})`, group: "knowledge" },
-    { id: "playbooks", label: `Playbook (${playbooks.length})`, group: "knowledge" },
-    { id: "stories", label: `Storie (${stories.length})`, group: "knowledge" },
-    { id: "knowledge-settings", label: "Impostazioni", group: "knowledge" },
-  ] as const;
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6 animate-fade-in">
@@ -849,7 +852,7 @@ export default function MemoryPage() {
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 absolute left-2.5 top-2" style={{ color: '#9AA0AC' }}>
                   <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                 </svg>
-                <input type="text" placeholder="Cerca nei ricordi..." value={searchQuery}
+                <input type="text" placeholder={language === 'en' ? "Search memories..." : "Cerca nei ricordi..."} value={searchQuery}
                   onChange={e => setSearchQuery(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 rounded-lg text-sm focus:outline-none"
                   style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }} />
@@ -857,14 +860,14 @@ export default function MemoryPage() {
               <select value={scopeFilter} onChange={e => setScopeFilter(e.target.value as any)}
                 className="px-2.5 py-1.5 rounded-lg text-sm focus:outline-none"
                 style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}>
-                <option value="all">Tutti gli scope</option>
-                <option value="local">Solo Locale</option>
-                <option value="global">Solo Globale</option>
+                <option value="all">{language === 'en' ? 'All scopes' : 'Tutti gli scope'}</option>
+                <option value="local">{language === 'en' ? 'Local only' : 'Solo Local'}</option>
+                <option value="global">{language === 'en' ? 'Global only' : 'Solo Global'}</option>
               </select>
               <select value={agentFilter} onChange={e => setAgentFilter(e.target.value)}
                 className="px-2.5 py-1.5 rounded-lg text-sm focus:outline-none"
                 style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}>
-                <option value="all">Tutti gli agenti</option>
+                <option value="all">{language === 'en' ? 'All agents' : 'All agents'}</option>
                 <option value="strategy">Strategy</option>
                 <option value="tech">Tech</option>
                 <option value="finance">Finance</option>
@@ -878,7 +881,7 @@ export default function MemoryPage() {
                 onMouseEnter={e => (e.currentTarget.style.background = '#E8F0FE')}
                 onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}>
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-                Aggiorna
+                Refresh
               </button>
             </>
           )}
@@ -888,7 +891,7 @@ export default function MemoryPage() {
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 absolute left-2.5 top-2" style={{ color: '#9AA0AC' }}>
                   <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                 </svg>
-                <input type="text" placeholder="Cerca pattern e playbook..." value={search}
+                <input type="text" placeholder="Search patterns e playbook..." value={search}
                   onChange={e => setSearch(e.target.value)}
                   className="w-full pl-8 pr-3 py-1.5 rounded-lg text-sm focus:outline-none"
                   style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }} />
@@ -896,7 +899,7 @@ export default function MemoryPage() {
               <select value={sectorFilter} onChange={e => setSectorFilter(e.target.value)}
                 className="px-2.5 py-1.5 rounded-lg text-sm focus:outline-none"
                 style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}>
-                <option value="all">Tutti i settori</option>
+                <option value="all">All sectors</option>
                 <option value="saas">SaaS</option>
                 <option value="fintech">Fintech</option>
                 <option value="ecommerce">E-commerce</option>
@@ -905,7 +908,7 @@ export default function MemoryPage() {
               <select value={phaseFilter} onChange={e => setPhaseFilter(e.target.value)}
                 className="px-2.5 py-1.5 rounded-lg text-sm focus:outline-none"
                 style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}>
-                <option value="all">Tutte le fasi</option>
+                <option value="all">All phases</option>
                 <option value="idea">Idea</option>
                 <option value="pre-seed">Pre-Seed</option>
                 <option value="mvp">MVP</option>
@@ -927,7 +930,7 @@ export default function MemoryPage() {
               <select value={storiesSectorFilter} onChange={e => setStoriesSectorFilter(e.target.value)}
                 className="px-2.5 py-1.5 rounded-lg text-sm focus:outline-none"
                 style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}>
-                <option value="all">Tutti i settori</option>
+                <option value="all">All sectors</option>
                 <option value="saas">SaaS</option>
                 <option value="fintech">Fintech</option>
                 <option value="ecommerce">E-commerce</option>
@@ -963,7 +966,7 @@ export default function MemoryPage() {
                   <path d="M12 2c-4.42 0-8 3.58-8 8 0 2.93 1.58 5.5 3.93 6.93V21h8.14v-4.07C18.42 15.5 20 12.93 20 10c0-4.42-3.58-8-8-8zm2 14.5v2.5h-4v-2.5C7.36 15.16 6 12.71 6 10c0-3.31 2.69-6 6-6s6 2.69 6 6c0 2.71-1.36 5.16-4 6.5z"/>
                 </svg>
               </div>
-              <h3 className="font-semibold text-sm mb-1" style={{ color: '#202124' }}>Nessun ricordo ancora</h3>
+              <h3 className="font-semibold text-sm mb-1" style={{ color: '#202124' }}>No memories ancora</h3>
               <p className="text-sm" style={{ color: '#5F6368' }}>
                 Mnemosyne estrarrà ricordi automaticamente dalle conversazioni con gli agenti.
               </p>
@@ -973,7 +976,7 @@ export default function MemoryPage() {
             </div>
           ) : groupedMemories.length === 0 ? (
             <div className="text-center py-10 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
-              <p className="text-sm" style={{ color: '#5F6368' }}>Nessun ricordo corrisponde ai filtri.</p>
+              <p className="text-sm" style={{ color: '#5F6368' }}>No memories corrisponde ai filtri.</p>
             </div>
           ) : (
             <>
@@ -1156,7 +1159,7 @@ export default function MemoryPage() {
 
           {filteredPatterns.length === 0 && (
             <div className="text-center py-10 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
-              <p className="text-sm" style={{ color: '#5F6368' }}>Nessun pattern con i filtri impostati.</p>
+              <p className="text-sm" style={{ color: '#5F6368' }}>No patterns con i filtri impostati.</p>
             </div>
           )}
 
@@ -1216,7 +1219,7 @@ export default function MemoryPage() {
             </div>
           ) : stories.length === 0 ? (
             <div className="text-center py-10 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
-              <p className="text-sm" style={{ color: '#5F6368' }}>Nessuna storia corrispondente ai filtri.</p>
+              <p className="text-sm" style={{ color: '#5F6368' }}>No stories corrispondente ai filtri.</p>
             </div>
           ) : (
             Object.entries(groupedStories).map(([secKey, secStories]) => {
@@ -1240,7 +1243,7 @@ export default function MemoryPage() {
         <div className="space-y-4">
           {filteredPlaybooks.length === 0 && (
             <div className="text-center py-10 rounded-xl" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
-              <p className="text-sm" style={{ color: '#5F6368' }}>Nessun playbook con i filtri impostati.</p>
+              <p className="text-sm" style={{ color: '#5F6368' }}>No playbooks con i filtri impostati.</p>
             </div>
           )}
           {filteredPlaybooks.map(pb => (
@@ -1265,7 +1268,7 @@ export default function MemoryPage() {
                 <p className="text-sm leading-relaxed mb-4" style={{ color: '#5F6368' }}>{pb.description}</p>
                 {pb.steps?.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#9AA0AC' }}>Passaggi del Playbook</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#9AA0AC' }}>Steps del Playbook</p>
                     {pb.steps.map((step: any, i: number) => (
                       <div key={i} className="flex items-center gap-3 px-4 py-3 rounded-lg" style={{ background: '#F8F9FA', border: '1px solid #E8EAED' }}>
                         <span className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style={{ background: '#1A73E8' }}>
@@ -1345,3 +1348,4 @@ export default function MemoryPage() {
     </div>
   );
 }
+

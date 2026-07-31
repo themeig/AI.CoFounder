@@ -51,8 +51,66 @@ export default function MetricsPage() {
   // Integration Configuration & Drawer states
   const [showIntegrations, setShowIntegrations] = useState(false);
   const [stripeConnected, setStripeConnected] = useState(false);
+  const [stripeSyncing, setStripeSyncing] = useState(false);
   const [mixpanelConnected, setMixpanelConnected] = useState(false);
   const [plaidConnected, setPlaidConnected] = useState(false);
+
+  // Stripe Sync Panel state
+  const [stripeSyncResult, setStripeSyncResult] = useState<{
+    status: 'idle' | 'syncing' | 'success' | 'error';
+    metrics?: any;
+    logs: { ts: string; level: string; msg: string }[];
+    syncDurationMs?: number;
+    apiCallsMade?: number;
+    isTestMode?: boolean;
+    message?: string;
+    lastSyncAt?: string;
+  }>({ status: 'idle', logs: [] });
+  const [showSyncLogs, setShowSyncLogs] = useState(false);
+  const syncLogsEndRef = useRef<HTMLDivElement>(null);
+
+  const handleStripeSync = async (testMode = false) => {
+    setStripeSyncing(true);
+    setStripeSyncResult(prev => ({ ...prev, status: 'syncing', logs: [] }));
+    setShowSyncLogs(true);
+
+    try {
+      const url = testMode ? "/api/demo/metrics/sync?test=true" : "/api/demo/metrics/sync";
+      const res = await fetch(url);
+      const data = await res.json();
+
+      if (res.ok && data.metrics) {
+        setStripeConnected(true);
+        setStripeSyncResult({
+          status: 'success',
+          metrics: data.metrics,
+          logs: data.logs || [],
+          syncDurationMs: data.syncDurationMs,
+          apiCallsMade: data.apiCallsMade,
+          isTestMode: data.isTestMode || false,
+          message: data.message,
+          lastSyncAt: data.metrics.lastSyncAt || new Date().toISOString(),
+        });
+        fetchMetrics();
+      } else {
+        setStripeSyncResult({
+          status: 'error',
+          logs: data.logs || [{ ts: new Date().toISOString(), level: 'error', msg: data.message || 'Errore sconosciuto' }],
+          syncDurationMs: data.syncDurationMs,
+          apiCallsMade: data.apiCallsMade,
+          message: data.message || 'Sincronizzazione fallita',
+        });
+      }
+    } catch (err: any) {
+      setStripeSyncResult({
+        status: 'error',
+        logs: [{ ts: new Date().toISOString(), level: 'error', msg: err.message || 'Errore di rete' }],
+        message: err.message,
+      });
+    } finally {
+      setStripeSyncing(false);
+    }
+  };
 
   const [stripeConnType, setStripeConnType] = useState("direct"); // "direct" or "proxy"
   const [stripeKey, setStripeKey] = useState("sk_test_demo");
@@ -234,6 +292,16 @@ export default function MetricsPage() {
     setStripeConnected(localStorage.getItem("agentfoundry_integration_stripe_conn") === "true");
     setMixpanelConnected(localStorage.getItem("agentfoundry_integration_mixpanel_conn") === "true");
     setPlaidConnected(localStorage.getItem("agentfoundry_integration_plaid_conn") === "true");
+
+    // Check Stripe API key status from server
+    fetch("/api/demo/keys?name=stripe")
+      .then(res => res.json())
+      .then(data => {
+        if (data.configured) {
+          setStripeConnected(true);
+        }
+      })
+      .catch(console.error);
 
     // Listen to real-time events from coFounder tool calls
     const handleUpdateEvent = () => {
@@ -665,6 +733,167 @@ export default function MetricsPage() {
             Nuova Metrica
           </button>
         </div>
+      </div>
+
+      {/* ── Stripe Sync Panel ── */}
+      <div className="rounded-2xl overflow-hidden transition-all" style={{ background: '#FFFFFF', border: `1px solid ${stripeSyncResult.status === 'success' ? '#CEEAD6' : stripeSyncResult.status === 'error' ? '#FAD2CF' : '#E8EAED'}`, boxShadow: '0 1px 3px rgba(60,64,67,0.08)' }}>
+        {/* Panel Header */}
+        <div className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3" style={{ background: stripeConnected ? '#F6FEF8' : '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center text-lg" style={{ background: stripeConnected ? '#CEEAD6' : '#E8EAED' }}>
+              💳
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-sm" style={{ color: '#202124' }}>Stripe Revenue Connector</h3>
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${stripeConnected ? 'bg-[#34A853] text-white' : 'bg-[#9AA0A6] text-white'}`}>
+                  {stripeConnected ? '● Connesso' : '○ Non connesso'}
+                </span>
+                {stripeSyncResult.isTestMode && stripeSyncResult.status === 'success' && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#FEF7E0] text-[#E37400] border border-[#FBBC04]">
+                    🧪 Dati Demo
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] mt-0.5" style={{ color: '#5F6368' }}>
+                {stripeConnected
+                  ? 'Estrae e calcola MRR, ARR, Churn, LTV, ARPU e Clienti da Stripe API.'
+                  : 'Configura la tua Restricted API Key in Settings per abilitare il calcolo automatico.'}
+                {stripeSyncResult.lastSyncAt && (
+                  <span className="ml-2 text-[10px] font-mono" style={{ color: '#9AA0A6' }}>
+                    Ultimo sync: {new Date(stripeSyncResult.lastSyncAt).toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                )}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Test Demo Button — always available */}
+            <button
+              onClick={() => handleStripeSync(true)}
+              disabled={stripeSyncing}
+              className="px-3.5 py-2 text-xs font-semibold rounded-lg transition disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap"
+              style={{ background: '#FEF7E0', color: '#E37400', border: '1px solid #FBBC04' }}
+              title="Testa l'interfaccia con dati demo senza chiave Stripe reale"
+            >
+              <span>🧪</span>
+              <span>{stripeSyncing && !stripeConnected ? 'Testing...' : 'Test Demo'}</span>
+            </button>
+
+            {stripeConnected ? (
+              <button
+                onClick={() => handleStripeSync(false)}
+                disabled={stripeSyncing}
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-[#137333] text-white hover:bg-[#0D5224] transition disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+              >
+                {stripeSyncing ? (
+                  <>
+                    <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                      <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                    </svg>
+                    <span>Sincronizzazione...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>🔄</span>
+                    <span>Sincronizza Ora</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <a
+                href="/dashboard/settings"
+                className="px-4 py-2 text-xs font-bold rounded-lg bg-[#1A73E8] text-white hover:bg-[#1557B0] transition flex items-center gap-1.5 whitespace-nowrap shadow-sm"
+              >
+                <span>⚙️</span>
+                <span>Collega Stripe</span>
+              </a>
+            )}
+
+            {/* Toggle Logs Button */}
+            {stripeSyncResult.logs.length > 0 && (
+              <button
+                onClick={() => setShowSyncLogs(!showSyncLogs)}
+                className="px-3 py-2 text-xs font-medium rounded-lg transition flex items-center gap-1 whitespace-nowrap"
+                style={{ background: '#F1F3F4', color: '#5F6368', border: '1px solid #DADCE0' }}
+              >
+                <span className="font-mono text-[10px]">{'>_'}</span>
+                <span>{showSyncLogs ? 'Nascondi Log' : 'Mostra Log'}</span>
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* ── KPI Mini-Summary (after successful sync) ── */}
+        {stripeSyncResult.status === 'success' && stripeSyncResult.metrics && (
+          <div className="px-5 py-3 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3" style={{ borderBottom: '1px solid #E8EAED', background: '#FAFBFC' }}>
+            {[
+              { label: 'MRR', value: `${stripeSyncResult.metrics.currency === 'EUR' ? '€' : '$'}${stripeSyncResult.metrics.mrr.toLocaleString()}`, color: '#1A73E8' },
+              { label: 'ARR', value: `${stripeSyncResult.metrics.currency === 'EUR' ? '€' : '$'}${stripeSyncResult.metrics.arr.toLocaleString()}`, color: '#1A73E8' },
+              { label: 'Churn', value: `${stripeSyncResult.metrics.churnRate}%`, color: stripeSyncResult.metrics.churnRate > 5 ? '#EA4335' : '#34A853' },
+              { label: 'ARPU', value: `${stripeSyncResult.metrics.currency === 'EUR' ? '€' : '$'}${stripeSyncResult.metrics.arpu}`, color: '#8E24AA' },
+              { label: 'LTV', value: `${stripeSyncResult.metrics.currency === 'EUR' ? '€' : '$'}${stripeSyncResult.metrics.ltv.toLocaleString()}`, color: '#E37400' },
+              { label: 'Clienti', value: `${stripeSyncResult.metrics.activeCustomers}`, color: '#137333' },
+            ].map((kpi, idx) => (
+              <div key={idx} className="text-center p-2 rounded-lg" style={{ background: '#FFFFFF', border: '1px solid #E8EAED' }}>
+                <p className="text-[9px] font-bold tracking-widest uppercase" style={{ color: '#9AA0A6' }}>{kpi.label}</p>
+                <p className="text-sm font-extrabold mt-0.5" style={{ color: kpi.color }}>{kpi.value}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Sync Status Bar ── */}
+        {stripeSyncResult.status !== 'idle' && (
+          <div className="px-5 py-2 flex items-center justify-between text-[11px]" style={{ background: stripeSyncResult.status === 'success' ? '#E6F4EA' : stripeSyncResult.status === 'error' ? '#FCE8E6' : '#E8F0FE', borderBottom: showSyncLogs ? '1px solid #E8EAED' : 'none' }}>
+            <div className="flex items-center gap-2 font-medium" style={{ color: stripeSyncResult.status === 'success' ? '#137333' : stripeSyncResult.status === 'error' ? '#C5221F' : '#1A73E8' }}>
+              {stripeSyncResult.status === 'syncing' && (
+                <svg className="animate-spin w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3">
+                  <path d="M12 2a10 10 0 0 1 10 10" strokeLinecap="round" />
+                </svg>
+              )}
+              <span>
+                {stripeSyncResult.status === 'syncing' && 'Sincronizzazione in corso...'}
+                {stripeSyncResult.status === 'success' && (stripeSyncResult.message || '✓ Sincronizzazione completata')}
+                {stripeSyncResult.status === 'error' && `⚠ ${stripeSyncResult.message || 'Errore durante la sincronizzazione'}`}
+              </span>
+            </div>
+            <div className="flex items-center gap-3 text-[10px] font-mono" style={{ color: '#9AA0A6' }}>
+              {stripeSyncResult.syncDurationMs !== undefined && (
+                <span>⏱ {stripeSyncResult.syncDurationMs}ms</span>
+              )}
+              {stripeSyncResult.apiCallsMade !== undefined && (
+                <span>📡 {stripeSyncResult.apiCallsMade} API calls</span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* ── Expandable Log Viewer ── */}
+        {showSyncLogs && stripeSyncResult.logs.length > 0 && (
+          <div className="px-4 py-3 font-mono text-[11px] max-h-48 overflow-y-auto custom-scrollbar" style={{ background: '#1E1E2E', color: '#CDD6F4' }}>
+            {stripeSyncResult.logs.map((log, idx) => (
+              <div key={idx} className="py-0.5 flex items-start gap-2">
+                <span className="flex-shrink-0 text-[9px] font-mono" style={{ color: '#6C7086' }}>
+                  {new Date(log.ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+                <span className="flex-shrink-0 w-4 text-center">
+                  {log.level === 'ok' && <span style={{ color: '#A6E3A1' }}>✓</span>}
+                  {log.level === 'info' && <span style={{ color: '#89B4FA' }}>›</span>}
+                  {log.level === 'warn' && <span style={{ color: '#F9E2AF' }}>⚠</span>}
+                  {log.level === 'error' && <span style={{ color: '#F38BA8' }}>✗</span>}
+                </span>
+                <span style={{
+                  color: log.level === 'ok' ? '#A6E3A1' : log.level === 'error' ? '#F38BA8' : log.level === 'warn' ? '#F9E2AF' : '#CDD6F4'
+                }}>
+                  {log.msg}
+                </span>
+              </div>
+            ))}
+            <div ref={syncLogsEndRef} />
+          </div>
+        )}
       </div>
 
       {error && (

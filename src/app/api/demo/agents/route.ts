@@ -1,30 +1,5 @@
 import { NextResponse } from "next/server";
-
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
-const supabaseHeaders = {
-  "apikey": SUPABASE_SERVICE_KEY,
-  "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
-  "Content-Type": "application/json",
-  "Prefer": "return=representation",
-};
-
-async function supabaseFetch(path: string, options: any = {}) {
-  const url = `${SUPABASE_URL}/rest/v1${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...supabaseHeaders,
-      ...options.headers,
-    },
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Supabase REST error: ${response.status} - ${errorText}`);
-  }
-  return response.json();
-}
+import { supabaseFetch, SUPABASE_URL, SUPABASE_SERVICE_KEY } from "@/lib/supabase-demo";
 
 const DEFAULT_AGENTS = [
   { type: "strategy", name: "Strategy Agent", isActive: true },
@@ -126,17 +101,22 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing database configurations" }, { status: 500 });
     }
 
-    const { type, name, settings } = await req.json();
+    const { type, name, settings, expertise } = await req.json();
     if (!type || !name) {
       return NextResponse.json({ error: "Missing type or name parameter" }, { status: 400 });
     }
 
     const startup = await getOrCreateStartup();
 
-    const mergedSettings = {
+    const mergedSettings: any = {
       enabledTools: ["get_knowledge_pattern_details", "webSearch", "getStartupInfo", "getCustomMetrics", "readWebPage"],
       ...(settings || {})
     };
+
+    // Persist expertise at creation time so it's never lost
+    if (expertise && expertise.trim()) {
+      mergedSettings.expertise = expertise.trim();
+    }
 
     // Create new agent config
     const newAgent = await supabaseFetch(`/AgentConfig`, {

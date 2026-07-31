@@ -1,32 +1,7 @@
 import { generateEmbedding } from "./embeddings";
+import { supabaseFetch, SUPABASE_URL, SUPABASE_SERVICE_KEY } from "./supabase-demo";
 
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
 const OPENROUTER_KEY = process.env.OPENROUTER_API_KEY || "";
-
-const supabaseHeaders = {
-  "apikey": SUPABASE_SERVICE_KEY,
-  "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
-  "Content-Type": "application/json",
-  "Prefer": "return=representation",
-};
-
-async function supabaseFetch(path: string, options: any = {}) {
-  const url = `${SUPABASE_URL}/rest/v1${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...supabaseHeaders,
-      ...options.headers,
-      ...options.headers,
-    },
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Supabase REST error: ${response.status} - ${errorText}`);
-  }
-  return response.json();
-}
 
 export interface MemoryEntry {
   id: string;
@@ -135,11 +110,6 @@ export async function recall(
   top_k: number = 3,
   recencyBias: number = 0.5
 ): Promise<MemoryEntry[]> {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
-    console.warn("[Mnemosyne] Missing Supabase credentials; recall returning empty.");
-    return [];
-  }
-
   // --- 1. Try Vector Semantic Recall (Supabase pgvector RPC) ---
   try {
     console.log(`[Mnemosyne] Attempting vector semantic recall for: "${query}"`);
@@ -331,7 +301,7 @@ Se non c'è nulla da memorizzare, rispondi con un array vuoto: []`;
         "X-Title": "AgentFoundry",
       },
       body: JSON.stringify({
-        model: "openrouter/owl-alpha",
+        model: "openrouter/free",
         messages: [
           { role: "system", content: "Sei un assistente di memoria per agenti AI. Rispondi solo in formato JSON." },
           { role: "user", content: prompt }

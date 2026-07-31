@@ -114,11 +114,46 @@ export async function POST() {
       }
     }
 
-    console.log(`[Vector Backfill] Completed. Backfilled: ${patternsCount} patterns, ${memoriesCount} memories.`);
+    // --- 3. Backfill & Vectorize Playbooks ---
+    console.log("[Vector Backfill] 3. Fetching existing playbooks...");
+    let playbooksCount = 0;
+    try {
+      const playbooksRes = await fetch(`${SUPABASE_URL}/rest/v1/Playbook?select=*`, { headers });
+      if (playbooksRes.ok) {
+        const playbooks = await playbooksRes.json();
+        console.log(`[Vector Backfill] Found ${playbooks.length} playbooks. Generating embeddings...`);
+        for (const pb of playbooks) {
+          if (!pb.embedding) {
+            try {
+              const stepsText = Array.isArray(pb.steps) ? pb.steps.map((s: any) => s.title).join(", ") : "";
+              const textToEmbed = `${pb.title}. ${pb.description}. Steps: ${stepsText}`;
+              const embedding = await generateEmbedding(textToEmbed);
+              
+              const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/Playbook?id=eq.${pb.id}`, {
+                method: "PATCH",
+                headers,
+                body: JSON.stringify({ embedding }),
+              });
+              
+              if (updateRes.ok) {
+                playbooksCount++;
+              }
+            } catch (err: any) {
+              console.error(`Error embedding playbook ${pb.id}:`, err.message);
+            }
+          }
+        }
+      }
+    } catch (pbErr: any) {
+      console.warn("[Vector Backfill] Playbook backfill warning:", pbErr.message);
+    }
+
+    console.log(`[Vector Backfill] Completed. Backfilled: ${patternsCount} patterns, ${memoriesCount} memories, ${playbooksCount} playbooks.`);
     return NextResponse.json({
       success: true,
       patternsBackfilled: patternsCount,
       memoriesBackfilled: memoriesCount,
+      playbooksBackfilled: playbooksCount,
     });
   } catch (error: any) {
     console.error("[Vector Backfill] Error during migration:", error);

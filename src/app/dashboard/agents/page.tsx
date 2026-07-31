@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import ModelSelector from '@/components/ModelSelector';
 import { DEFAULT_APP_SETTINGS } from '@/lib/settings';
+import { useTranslation } from '@/lib/i18n/LanguageContext';
+import { globalStreamManager, startChatStream } from '@/lib/global-stream-manager';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -11,6 +13,115 @@ interface Message {
   thinking?: string;
   debugLogs?: string[];
   isStreaming?: boolean;
+  form?: {
+    title: string;
+    description: string;
+    fields: any[];
+  } | null;
+}
+
+function AgentInteractiveForm({
+  form,
+  messageId,
+  onSubmitResponse,
+  isAlreadySubmitted
+}: {
+  form: { title: string; description: string; fields: any[] };
+  messageId: string;
+  onSubmitResponse: (text: string) => void;
+  isAlreadySubmitted: boolean;
+}) {
+  const [formValues, setFormValues] = useState<Record<string, any>>({});
+  const [formSubmitted, setFormSubmitted] = useState(isAlreadySubmitted);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = form.title || "Richiesta Informazioni";
+    const fields = form.fields || [];
+
+    let formattedText = `Risposte fornite per il modulo "${title}":\n`;
+    fields.forEach((field: any) => {
+      const val = formValues[field.id];
+      const displayVal = val === undefined || val === '' ? "(Non fornito)" : String(val);
+      formattedText += `- **${field.label}**: ${displayVal}\n`;
+    });
+
+    onSubmitResponse(formattedText);
+    setFormSubmitted(true);
+  };
+
+  const handleFieldChange = (fieldId: string, val: any) => {
+    setFormValues(prev => ({ ...prev, [fieldId]: val }));
+  };
+
+  return (
+    <div className="mt-3 p-3 rounded-xl border border-blue-100 bg-blue-50/20 text-xs space-y-2.5 text-left w-full max-w-md">
+      <div className="flex items-center gap-1.5 border-b border-blue-100 pb-2">
+        <span className="text-base">📋</span>
+        <div>
+          <h4 className="font-bold text-gray-800">{form.title}</h4>
+          <p className="text-[10px] text-gray-500 mt-0.5">{form.description}</p>
+        </div>
+      </div>
+
+      {formSubmitted ? (
+        <div className="py-2 flex items-center gap-2 text-green-600 font-semibold text-[11px] animate-fade-in">
+          <span>✓</span> Risposte inviate con successo all'agente!
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {(form.fields || []).map((field: any) => (
+            <div key={field.id} className="space-y-1">
+              <label className="block text-[10px] font-bold text-gray-600">
+                {field.label} {field.required && <span className="text-red-500">*</span>}
+              </label>
+
+              {field.type === 'select' ? (
+                <select
+                  value={formValues[field.id] || ''}
+                  onChange={e => handleFieldChange(field.id, e.target.value)}
+                  required={field.required}
+                  className="w-full px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="">Seleziona un'opzione...</option>
+                  {(field.options || []).map((opt: string) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                </select>
+              ) : field.type === 'boolean' ? (
+                <select
+                  value={formValues[field.id] !== undefined ? String(formValues[field.id]) : ''}
+                  onChange={e => handleFieldChange(field.id, e.target.value === 'true')}
+                  required={field.required}
+                  className="w-full px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                >
+                  <option value="">Seleziona...</option>
+                  <option value="true">Yes</option>
+                  <option value="false">No</option>
+                </select>
+              ) : (
+                <input
+                  type={field.type === 'number' ? 'number' : 'text'}
+                  value={formValues[field.id] || ''}
+                  placeholder={field.placeholder || ''}
+                  onChange={e => handleFieldChange(field.id, field.type === 'number' ? Number(e.target.value) : e.target.value)}
+                  required={field.required}
+                  className="w-full px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                />
+              )}
+            </div>
+          ))}
+
+          <button
+            type="submit"
+            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[10px] transition-colors flex items-center gap-1 mt-2 shadow-sm"
+          >
+            <span>🚀</span> Invia Informazioni
+          </button>
+        </form>
+      )}
+    </div>
+  );
 }
 
 const AGENT_TYPE_CONFIG: Record<string, { color: string; bgColor: string; label: string }> = {
@@ -22,22 +133,40 @@ const AGENT_TYPE_CONFIG: Record<string, { color: string; bgColor: string; label:
   operations: { color: '#17A2B8', bgColor: '#E0F7FA', label: 'Ops' },
 };
 
-const AGENT_DESC: Record<string, string> = {
-  strategy:   'Analisi di mercato, strategie di crescita, competitor',
-  tech:       'Architettura, codice, infrastruttura, DevOps',
-  finance:    'Cash flow, fundraising, metriche SaaS',
-  marketing:  'Campagne, contenuti, acquisizione utenti',
-  legal:      'Contratti, incorporazione, compliance',
-  operations: 'Workflow, automazione, gestione del team',
+const AGENT_DESC: Record<string, { en: string; it: string }> = {
+  strategy:   { en: 'Market analysis, growth strategies, competitor landscape', it: 'Analisi di mercato, strategie di crescita, competitor' },
+  tech:       { en: 'Software architecture, code reviews, DevOps & infrastructure', it: 'Architettura, codice, infrastruttura, DevOps' },
+  finance:    { en: 'Cash flow management, fundraising, SaaS metrics & runway', it: 'Cash flow, fundraising, metriche SaaS' },
+  marketing:  { en: 'Campaigns, content strategy, user acquisition & PLG', it: 'Campagne, contenuti, acquisizione utenti' },
+  legal:      { en: 'Contracts, incorporation, IP protection & GDPR compliance', it: 'Contratti, incorporazione, compliance' },
+  operations: { en: 'Workflow optimization, automation, team productivity', it: 'Workflow, automazione, gestione del team' },
 };
 
-const STARTER_PROMPTS: Record<string, string[]> = {
-  strategy:   ['Qual è il modello GTM ideale per un SaaS B2B early-stage?', 'Come strutturare l\'analisi dei competitor?', 'Aiutami a definire la proposta di valore per il mercato'],
-  tech:       ['Consigliami l\'architettura database per i workflow queue', 'Come configuriamo il deploy su Vercel + Supabase?', 'Scrivi uno script di migrazione SQL con Row Level Security'],
-  finance:    ['Come calcoliamo la runway con il burn rate attuale?', 'Crea una tabella di proiezioni finanziarie a 12 mesi', 'Quali metriche SaaS tracciare fin da subito?'],
-  marketing:  ['Come impostiamo la strategia SEO a budget zero?', 'Pianifica un lancio su Product Hunt', 'Canali di acquisizione B2B SaaS con approccio PLG'],
-  legal:      ['Clausole fondamentali per un contratto SaaS', 'Compliance GDPR per il tracciamento dei log', 'Ripartizione delle quote tra i founder'],
-  operations: ['Come strutturare i ticket su Linear?', 'Configura un workflow di notifica con Zapier', 'Checklist per l\'onboarding del primo ingegnere'],
+const STARTER_PROMPTS: Record<string, { en: string[]; it: string[] }> = {
+  strategy:   {
+    en: ['What is the ideal GTM model for an early-stage B2B SaaS?', 'How should we structure competitor analysis?', 'Help me refine our core value proposition'],
+    it: ['Qual è il modello GTM ideale per un SaaS B2B early-stage?', 'Come strutturare l\'analisi dei competitor?', 'Aiutami a definire la proposta di valore per il mercato']
+  },
+  tech:       {
+    en: ['Recommend a database architecture for worker queues', 'How do we configure Vercel + Supabase deployment?', 'Write an SQL migration script with Row Level Security'],
+    it: ['Consigliami l\'architettura database per i workflow queue', 'Come configuriamo il deploy su Vercel + Supabase?', 'Scrivi uno script di migrazione SQL con Row Level Security']
+  },
+  finance:    {
+    en: ['How do we calculate runway with current burn rate?', 'Create a 12-month financial projection table', 'Which SaaS metrics should we track from day 1?'],
+    it: ['Come calcoliamo la runway con il burn rate attuale?', 'Crea una tabella di proiezioni finanziarie a 12 mesi', 'Quali metriche SaaS tracciare fin da subito?']
+  },
+  marketing:  {
+    en: ['How do we set up a zero-budget SEO strategy?', 'Plan a launch campaign for Product Hunt', 'B2B SaaS acquisition channels with PLG approach'],
+    it: ['Come impostiamo la strategia SEO a budget zero?', 'Pianifica un lancio su Product Hunt', 'Canali di acquisizione B2B SaaS con approccio PLG']
+  },
+  legal:      {
+    en: ['Essential clauses for a SaaS terms of service agreement', 'GDPR compliance requirements for user log tracking', 'Equity splitting and founder vesting schedules'],
+    it: ['Clausole fondamentali per un contratto SaaS', 'Compliance GDPR per il tracciamento dei log', 'Ripartizione delle quote tra i founder']
+  },
+  operations: {
+    en: ['How to structure issue tracking on Linear?', 'Set up a notification workflow using Zapier', 'Checklist for onboarding our first engineer'],
+    it: ['Come strutturare i ticket su Linear?', 'Configura un workflow di notifica con Zapier', 'Checklist per l\'onboarding del primo ingegnere']
+  },
 };
 
 // ── Markdown Parser ──────────────────────────────────────────────────
@@ -426,7 +555,7 @@ const buildPreviewHtml = (artifacts: any[], activeArtifact: any | null): string 
 const runCode = (code: string, language: string): string[] => {
   const l = language.toLowerCase();
   if (l !== 'javascript' && l !== 'typescript' && l !== 'js' && l !== 'ts') {
-    return ["[System] L'esecuzione del codice è supportata solo per JavaScript e TypeScript."];
+    return ["[System] Code execution is only supported for JavaScript and TypeScript."];
   }
 
   const logs: string[] = [];
@@ -471,45 +600,56 @@ const runCode = (code: string, language: string): string[] => {
   return logs;
 };
 
-const AVAILABLE_TOOLS = [
+const getAvailableTools = (lang: string) => [
   {
     name: 'webSearch',
-    label: 'Cerca su Internet',
+    label: lang === 'en' ? 'Internet Search' : 'Cerca su Internet',
     icon: '🌐',
-    defaultDescription: 'Esegue una ricerca web su Internet in tempo reale per reperire informazioni aggiornate, notizie, trend di mercato e dati finanziari utili.',
-    parameters: 'query: string (la query di ricerca)'
+    defaultDescription: lang === 'en'
+      ? 'Performs a real-time web search to fetch updated news, market trends, and financial data.'
+      : 'Esegue una ricerca web su Internet in tempo reale per reperire informazioni aggiornate, notizie, trend di mercato e dati finanziari utili.',
+    parameters: lang === 'en' ? 'query: string (search query)' : 'query: string (la query di ricerca)'
   },
   {
     name: 'readWebPage',
-    label: 'Leggi Pagina Web',
+    label: lang === 'en' ? 'Read Web Page' : 'Leggi Pagina Web',
     icon: '📄',
-    defaultDescription: 'Scarica e legge il testo contenuto in una pagina web/URL specificato per estrarne notizie, articoli o informazioni dettagliate.',
-    parameters: 'url: string (l\'indirizzo URL completo)'
+    defaultDescription: lang === 'en'
+      ? 'Downloads and reads full content from a specified URL to extract detailed articles or news.'
+      : 'Scarica e legge il testo contenuto in una pagina web/URL specificato per estrarne notizie, articoli o informazioni dettagliate.',
+    parameters: lang === 'en' ? 'url: string (complete URL address)' : 'url: string (l\'indirizzo URL completo)'
   },
   {
     name: 'getStartupInfo',
-    label: 'Informazioni Startup',
+    label: lang === 'en' ? 'Startup Info' : 'Informazioni Startup',
     icon: '🚀',
-    defaultDescription: 'Recupera le informazioni generali e le metriche finanziarie chiave della startup (nome, settore, fase, MRR, utenti, burn rate, runway).',
-    parameters: 'Nessuno'
+    defaultDescription: lang === 'en'
+      ? 'Fetches key startup metrics (name, sector, phase, MRR, users, burn rate, runway).'
+      : 'Recupera le informazioni generali e le metriche finanziarie chiave della startup (nome, settore, fase, MRR, utenti, burn rate, runway).',
+    parameters: lang === 'en' ? 'None' : 'Nessuno'
   },
   {
     name: 'getCustomMetrics',
-    label: 'Metriche Personalizzate',
+    label: lang === 'en' ? 'Custom Metrics' : 'Metriche Personalizzate',
     icon: '📊',
-    defaultDescription: 'Recupera l\'elenco di tutte le metriche personalizzate e i relativi grafici configurati per la dashboard (titolo, valore, formula, andamento dati).',
-    parameters: 'Nessuno'
+    defaultDescription: lang === 'en'
+      ? 'Fetches all custom metrics and dashboard charts (title, value, formula, data trends).'
+      : 'Recupera l\'elenco di tutte le metriche personalizzate e i relativi grafici configurati per la dashboard (titolo, valore, formula, andamento dati).',
+    parameters: lang === 'en' ? 'None' : 'Nessuno'
   },
   {
     name: 'get_knowledge_pattern_details',
-    label: 'Dettagli Pattern',
+    label: lang === 'en' ? 'Pattern Details' : 'Dettagli Pattern',
     icon: '🧠',
-    defaultDescription: 'Recupera i dettagli completi (analisi qualitativa, fattori di successo, checklist errori) di una specifica conoscenza o pattern inserendo il suo ID.',
-    parameters: 'patternId: string (l\'ID del pattern)'
+    defaultDescription: lang === 'en'
+      ? 'Retrieves complete qualitative details, success factors, and failure modes for a specific pattern ID.'
+      : 'Recupera i dettagli completi (analisi qualitativa, fattori di successo, checklist errori) di una specifica conoscenza o pattern inserendo il suo ID.',
+    parameters: lang === 'en' ? 'patternId: string (pattern ID)' : 'patternId: string (l\'ID del pattern)'
   }
 ];
 
 export default function AgentsPage() {
+  const { t, language } = useTranslation();
   const [settings, setSettings] = useState<any>(DEFAULT_APP_SETTINGS);
   const [agentsList, setAgentsList] = useState<any[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
@@ -519,7 +659,7 @@ export default function AgentsPage() {
   const [generatingAgents, setGeneratingAgents] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedModel, setSelectedModel] = useState('openrouter/owl-alpha');
+  const [selectedModel, setSelectedModel] = useState('openrouter/free');
 
   const isHistoryLoading = selectedAgent ? !!historyLoadingAgents[selectedAgent] : false;
 
@@ -820,6 +960,51 @@ export default function AgentsPage() {
   const [newAgentName, setNewAgentName] = useState('');
   const [creatingAgent, setCreatingAgent] = useState(false);
 
+  // States for Agent Training and System Prompt management
+  const [activeConfigTab, setActiveConfigTab] = useState<'tools' | 'prompt'>('tools');
+  const [promptSubTab, setPromptSubTab] = useState<'editor' | 'preview'>('editor');
+  const [previewPromptText, setPreviewPromptText] = useState('');
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [identityTestResult, setIdentityTestResult] = useState('');
+  const [systemPromptText, setSystemPromptText] = useState('');
+  const [expertiseText, setExpertiseText] = useState('');
+  const [isPromptSaving, setIsPromptSaving] = useState(false);
+  const [isTraining, setIsTraining] = useState(false);
+  const [trainingLog, setTrainingLog] = useState<string[]>([]);
+  const [trainingPhase, setTrainingPhase] = useState<string>('idle');
+  const [formSubmittedValues, setFormSubmittedValues] = useState<Record<string, boolean>>({});
+  const [trainingProgress, setTrainingProgress] = useState<string>('');
+  const [trainingSources, setTrainingSources] = useState<{ url: string; title: string }[]>([]);
+  const [trainingStats, setTrainingStats] = useState<any>(null);
+  const [newAgentExpertise, setNewAgentExpertise] = useState('');
+  const [autoTrain, setAutoTrain] = useState(true);
+
+  const fetchPromptPreview = async (agentId: string) => {
+    setLoadingPreview(true);
+    try {
+      const res = await fetch(`/api/demo/agents/prompt/preview?agentId=${agentId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPreviewPromptText(data.fullPrompt || '');
+      } else {
+        setPreviewPromptText('Errore nel caricamento dell\'anteprima.');
+      }
+    } catch (err) {
+      console.error("Errore fetch preview prompt:", err);
+      setPreviewPromptText('Errore di connessione durante il caricamento dell\'anteprima.');
+    } finally {
+      setLoadingPreview(false);
+    }
+  };
+
+  const logContainerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (logContainerRef.current) {
+      logContainerRef.current.scrollTop = logContainerRef.current.scrollHeight;
+    }
+  }, [trainingLog]);
+
   const [showToolsPanel, setShowToolsPanel] = useState(false);
   const [expandedToolCustomization, setExpandedToolCustomization] = useState<string | null>(null);
   const [customDescriptionText, setCustomDescriptionText] = useState('');
@@ -844,6 +1029,51 @@ export default function AgentsPage() {
       } catch {}
     }
   }, []);
+
+  // ── Global Stream Manager Synchronization Effect ──
+  useEffect(() => {
+    if (!selectedAgent) return;
+
+    const handleStreamUpdate = (state: any) => {
+      const assistantMsg = {
+        role: 'assistant' as const,
+        content: state.content,
+        timestamp: new Date(),
+        thinking: state.thinking,
+        debugLogs: state.thinking ? state.thinking.split('\n').filter((l: string) => l.startsWith('[Debug] ')).map((l: string) => l.slice(8)) : [],
+        isStreaming: state.isGenerating,
+        form: state.requestedForm
+      };
+
+      setAgentChats(prev => {
+        const chats = { ...prev };
+        const messages = chats[selectedAgent] || [];
+        const last = messages[messages.length - 1];
+        let finalMessages = messages;
+
+        if (last && last.role === 'assistant') {
+          finalMessages[messages.length - 1] = assistantMsg;
+        } else {
+          finalMessages = [...messages, assistantMsg];
+        }
+
+        chats[selectedAgent] = finalMessages;
+        return chats;
+      });
+
+      setGeneratingAgents(prev => ({ ...prev, [selectedAgent]: state.isGenerating }));
+    };
+
+    if (selectedAgent) {
+      globalStreamManager.subscribe(selectedAgent, handleStreamUpdate);
+    }
+
+    return () => {
+      if (selectedAgent) {
+        globalStreamManager.unsubscribe(selectedAgent, handleStreamUpdate);
+      }
+    };
+  }, [selectedAgent]);
 
   const toggleSidebar = () => {
     const next = !sidebarCollapsed;
@@ -956,9 +1186,10 @@ export default function AgentsPage() {
     fetch('/api/demo/agents')
       .then(r => r.json())
       .then(data => {
-        setAgentsList(data);
-        if (data.length > 0) {
-          const target = data.find((a: any) => a.id === agentParamId);
+        const list = Array.isArray(data) ? data : [];
+        setAgentsList(list);
+        if (list.length > 0) {
+          const target = list.find((a: any) => a.id === agentParamId);
           setSelectedAgent(target ? target.id : null);
         }
       })
@@ -966,7 +1197,13 @@ export default function AgentsPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedAgent) return;
+    if (!selectedAgent) {
+      setSystemPromptText('');
+      setExpertiseText('');
+      setTrainingSources([]);
+      setTrainingStats(null);
+      return;
+    }
     if (generatingAgents[selectedAgent]) return;
 
     setHistoryLoadingAgents(prev => ({ ...prev, [selectedAgent]: true }));
@@ -977,14 +1214,30 @@ export default function AgentsPage() {
     const fetchId = selectedAgent;
     fetchArtifacts(fetchId);
 
+    // Fetch prompt & training data
+    setIdentityTestResult('');
+    fetch(`/api/demo/agents/prompt?agentId=${fetchId}`)
+      .then(r => r.json())
+      .then(data => {
+        if (fetchId === selectedAgentRef.current) {
+          setSystemPromptText(data.systemPrompt || '');
+          setExpertiseText(data.expertise || '');
+          setTrainingSources(data.knowledgeSources || []);
+          setTrainingStats(data.trainingStats || null);
+          fetchPromptPreview(fetchId);
+        }
+      })
+      .catch(console.error);
+
     fetch(`/api/demo/chat?agentId=${fetchId}`)
       .then(r => r.json())
       .then(data => {
         if (fetchId === selectedAgentRef.current) {
           isAtBottomRef.current = true;
+          const msgList = Array.isArray(data) ? data : [];
           setAgentChats(prev => ({
             ...prev,
-            [fetchId]: data.map((m: any) => ({ role: m.role, content: m.content, timestamp: new Date(m.createdAt) }))
+            [fetchId]: msgList.map((m: any) => ({ role: m.role, content: m.content, timestamp: new Date(m.createdAt) }))
           }));
         }
       })
@@ -999,6 +1252,134 @@ export default function AgentsPage() {
   }, [selectedAgent]);
 
 
+  const getPhaseStepIndex = (phase: string) => {
+    if (phase === 'queries') return 0;
+    if (phase === 'searching' || phase === 'search_progress') return 1;
+    if (phase === 'reading' || phase === 'read_progress') return 2;
+    if (phase === 'generating' || phase === 'generating_done') return 3;
+    if (phase === 'testing' || phase === 'testing_done') return 4;
+    if (phase === 'saving' || phase === 'done') return 5;
+    return -1;
+  };
+
+  const startAgentTraining = async (agentId: string, expertiseVal: string, nameVal: string, typeVal: string) => {
+    setIsTraining(true);
+    setTrainingLog([]);
+    setTrainingPhase('queries');
+    setTrainingProgress('Inizializzazione...');
+    setTrainingSources([]);
+
+    try {
+      const res = await fetch('/api/demo/agents/train', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentId, expertise: expertiseVal, agentName: nameVal, agentType: typeVal, modelId: selectedModel }),
+      });
+
+      if (!res.ok) {
+        throw new Error('Errore durante la chiamata API di training');
+      }
+
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+      let buffer = '';
+
+      while (!done && reader) {
+        const { value, done: doneReading } = await reader.read();
+        done = doneReading;
+        if (done) break;
+        buffer += decoder.decode(value, { stream: !done });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const clean = line.trim();
+          if (!clean || !clean.startsWith('data: ')) continue;
+          try {
+            const parsed = JSON.parse(clean.substring(6));
+            if (parsed.type === 'phase') {
+              setTrainingPhase(parsed.phase);
+              setTrainingProgress(parsed.message);
+              setTrainingLog(prev => [...prev, parsed.message]);
+            } else if (parsed.type === 'search_progress') {
+              setTrainingLog(prev => [...prev, `🔍 Ricerca web: "${parsed.query}" -> ${parsed.count} risultati`]);
+            } else if (parsed.type === 'read_progress') {
+              setTrainingLog(prev => [...prev, `📖 Letta pagina: "${parsed.title}" (${(parsed.chars / 1000).toFixed(1)}KB)`]);
+            } else if (parsed.type === 'testing_done') {
+              setTrainingLog(prev => [...prev, parsed.message]);
+            } else if (parsed.type === 'error') {
+              setTrainingLog(prev => [...prev, `❌ Errore: ${parsed.message}`]);
+              setTrainingPhase('error');
+              setIsTraining(false);
+            } else if (parsed.type === 'done') {
+              setTrainingLog(prev => [
+                ...prev, 
+                `✅ Training completato con successo!`,
+                `🧪 Identity Test Result: "${parsed.identityTestResult || 'No result'}"`
+              ]);
+              setTrainingPhase('done');
+              setTrainingProgress(parsed.message);
+              setSystemPromptText(parsed.systemPrompt || '');
+              setTrainingSources(parsed.sources || []);
+              setTrainingStats(parsed.stats || null);
+              setIdentityTestResult(parsed.identityTestResult || '');
+              fetchPromptPreview(agentId);
+
+              // Refresh agents list
+              fetch('/api/demo/agents')
+                .then(r => r.json())
+                .then(data => setAgentsList(Array.isArray(data) ? data : []))
+                .catch(console.error);
+
+              setTimeout(() => {
+                setIsTraining(false);
+              }, 500);
+              done = true;
+            }
+          } catch (e) {
+            console.error('Errore parsing SSE line', e);
+          }
+        }
+      }
+    } catch (err: any) {
+      setTrainingLog(prev => [...prev, `❌ Errore: ${err.message || err}`]);
+      setTrainingPhase('error');
+      setIsTraining(false);
+    }
+  };
+
+  const handleSavePrompt = async () => {
+    if (!currentAgent) return;
+    setIsPromptSaving(true);
+    try {
+      const res = await fetch('/api/demo/agents/prompt', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agentId: currentAgent.id,
+          systemPrompt: systemPromptText,
+          expertise: expertiseText
+        })
+      });
+      if (res.ok) {
+        const listRes = await fetch('/api/demo/agents');
+        if (listRes.ok) {
+          const data = await listRes.json();
+          setAgentsList(data);
+        }
+        await fetchPromptPreview(currentAgent.id);
+        alert('Modifiche salvate con successo!');
+      } else {
+        throw new Error('Errore durante il salvataggio');
+      }
+    } catch (err: any) {
+      alert(err.message || 'Errore durante il salvataggio');
+    } finally {
+      setIsPromptSaving(false);
+    }
+  };
+
   const createAgent = async () => {
     if (!newAgentName.trim()) return;
     setCreatingAgent(true);
@@ -1006,7 +1387,7 @@ export default function AgentsPage() {
       const res = await fetch('/api/demo/agents', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ type: newAgentType, name: newAgentName.trim() }),
+        body: JSON.stringify({ type: newAgentType, name: newAgentName.trim(), expertise: newAgentExpertise.trim() || undefined }),
       });
       if (res.ok) {
         const newAgent = await res.json();
@@ -1014,7 +1395,14 @@ export default function AgentsPage() {
         setSelectedAgent(newAgent.id);
         setAgentChats(prev => ({ ...prev, [newAgent.id]: [] }));
         setShowCreateForm(false);
+        const expertiseVal = newAgentExpertise.trim();
+        const autoTrainVal = autoTrain;
         setNewAgentName('');
+        setNewAgentExpertise('');
+
+        if (autoTrainVal && expertiseVal) {
+          startAgentTraining(newAgent.id, expertiseVal, newAgent.name, newAgent.type);
+        }
       }
     } catch (err: any) { setError(err.message); }
     finally { setCreatingAgent(false); }
@@ -1153,8 +1541,7 @@ export default function AgentsPage() {
     setExpandedToolCustomization(null);
   };
 
-  const sendMessage = async () => {
-    const userMessage = input.trim();
+  const performSendMessage = async (userMessage: string) => {
     if (!userMessage || !selectedAgent || !currentAgent) return;
 
     const agentId = currentAgent.id;
@@ -1169,88 +1556,49 @@ export default function AgentsPage() {
     setGeneratingAgents(prev => ({ ...prev, [agentId]: true }));
     setAgentGenerationStartTimes(prev => ({ ...prev, [agentId]: Date.now() }));
 
-    try {
-      const res = await fetch('/api/demo/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agentId, agentType: currentAgent.type, message: userMessage, modelId: selectedModel, settings }),
+    const requestBody = { agentId, agentType: currentAgent.type, message: userMessage, modelId: selectedModel, settings };
+
+    startChatStream('/api/demo/chat', agentId, requestBody, async (finalState) => {
+      // Sincronizza stato al termine dello stream
+      const assistantMsg = {
+        role: 'assistant' as const,
+        content: finalState.content,
+        timestamp: new Date(),
+        thinking: finalState.thinking,
+        debugLogs: finalState.thinking ? finalState.thinking.split('\n').filter((l: string) => l.startsWith('[Debug] ')).map((l: string) => l.slice(8)) : [],
+        isStreaming: false,
+        form: finalState.requestedForm
+      };
+
+      setAgentChats(prev => {
+        const chats = { ...prev };
+        const messages = chats[agentId] || [];
+        const lastMsg = messages[messages.length - 1];
+        if (lastMsg && lastMsg.role === 'assistant') {
+          chats[agentId] = [...messages.slice(0, -1), assistantMsg];
+        } else {
+          chats[agentId] = [...messages, assistantMsg];
+        }
+        return chats;
       });
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.details || err.error || 'Errore sconosciuto');
-      }
-
-      isAtBottomRef.current = true;
-      updateAgentMessages(agentId, prev => [...prev, { role: 'assistant', content: '', timestamp: new Date(), thinking: '', debugLogs: [], isStreaming: true }]);
-
-      const reader = res.body?.getReader();
-      const decoder = new TextDecoder();
-      let done = false;
-      let buffer = '';
-
-      while (!done && reader) {
-        const { value, done: doneReading } = await reader.read();
-        done = doneReading;
-        if (done) break;
-        buffer += decoder.decode(value, { stream: !done });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          const clean = line.trim();
-          if (!clean || !clean.startsWith('data: ')) continue;
-          try {
-            const parsed = JSON.parse(clean.substring(6));
-            if (parsed.type === 'debug') {
-              updateAgentMessages(agentId, prev => {
-                const u = [...prev];
-                const last = u[u.length - 1];
-                if (last?.role === 'assistant') u[u.length - 1] = { ...last, debugLogs: [...(last.debugLogs || []), parsed.content] };
-                return u;
-              });
-            } else if (parsed.type === 'thinking') {
-              updateAgentMessages(agentId, prev => {
-                const u = [...prev];
-                const last = u[u.length - 1];
-                if (last?.role === 'assistant') u[u.length - 1] = { ...last, thinking: (last.thinking || '') + parsed.content };
-                return u;
-              });
-            } else if (parsed.type === 'text') {
-              updateAgentMessages(agentId, prev => {
-                const u = [...prev];
-                const last = u[u.length - 1];
-                if (last?.role === 'assistant') u[u.length - 1] = { ...last, content: (last.content || '') + parsed.content };
-                return u;
-              });
-            } else if (parsed.type === 'error') {
-              if (agentId === selectedAgentRef.current) {
-                setError(parsed.content);
-              }
-            } else if (parsed.type === 'done') {
-              updateAgentMessages(agentId, prev => {
-                const u = [...prev];
-                const last = u[u.length - 1];
-                if (last?.role === 'assistant') u[u.length - 1] = { ...last, isStreaming: false };
-                return u;
-              });
-              done = true;
-            }
-          } catch {}
-        }
-      }
+      setGeneratingAgents(prev => ({ ...prev, [agentId]: false }));
 
       if (agentId === selectedAgentRef.current) {
         fetchArtifacts(agentId);
       }
-    } catch (err: any) {
+    }).catch((err: any) => {
       if (agentId === selectedAgentRef.current) {
         setError(err.message);
       }
       updateAgentMessages(agentId, prev => [...prev, { role: 'assistant', content: `Errore: ${err.message}`, timestamp: new Date() }]);
-    } finally {
       setGeneratingAgents(prev => ({ ...prev, [agentId]: false }));
-    }
+    });
+  };
+
+  const sendMessage = () => {
+    const userMessage = input.trim();
+    performSendMessage(userMessage);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -1299,7 +1647,7 @@ export default function AgentsPage() {
                 title="Aggiungi Agente"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                  <path d="M19 13h-6v6-2v-6H5v-2h6V5h2v6h6v2z"/>
+                  <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                 </svg>
               </button>
             )}
@@ -1356,6 +1704,29 @@ export default function AgentsPage() {
                 className="w-full px-2.5 py-1.5 rounded-lg text-xs focus:outline-none"
                 style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
               />
+            </div>
+            <div>
+              <label className="block text-[10px] font-medium mb-1" style={{ color: '#5F6368' }}>Competenze (Expertise)</label>
+              <textarea
+                placeholder="Describe what the agent should do. The system will research news, guides, and best practices to make it an expert..."
+                value={newAgentExpertise}
+                onChange={e => setNewAgentExpertise(e.target.value)}
+                rows={3}
+                className="w-full px-2.5 py-1.5 rounded-lg text-xs focus:outline-none resize-none font-sans"
+                style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124' }}
+              />
+            </div>
+            <div className="flex items-center gap-2 py-1 select-none">
+              <input
+                type="checkbox"
+                id="autoTrain"
+                checked={autoTrain}
+                onChange={e => setAutoTrain(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-3.5 w-3.5 cursor-pointer"
+              />
+              <label htmlFor="autoTrain" className="text-[11px] font-medium cursor-pointer" style={{ color: '#5F6368' }}>
+                Auto-Addestra con Ricerca Web
+              </label>
             </div>
             <div className="flex gap-2">
               <button
@@ -1464,7 +1835,13 @@ export default function AgentsPage() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="font-semibold text-sm truncate" style={{ color: '#202124' }}>{agent.name}</div>
-                  <div className="text-xs truncate mt-0.5" style={{ color: '#5F6368' }}>{AGENT_DESC[agent.type] || agent.type}</div>
+                  <div className="text-xs truncate mt-0.5 flex items-center gap-1.5" style={{ color: '#5F6368' }}>
+                    <span>{AGENT_DESC[agent.type]?.[language as 'en' | 'it'] || agent.type}</span>
+                    <span className="w-1 h-1 rounded-full" style={{ background: !!(agent.settings as any)?.systemPrompt ? '#34A853' : '#9AA0AC' }} />
+                    <span className="text-[9px] font-medium" style={{ color: !!(agent.settings as any)?.systemPrompt ? '#137333' : '#70757a' }}>
+                      {!!(agent.settings as any)?.systemPrompt ? 'Trained' : 'Base'}
+                    </span>
+                  </div>
                 </div>
                 {isGeneratingVal ? (
                   <div className="flex items-center gap-1 flex-shrink-0">
@@ -1541,7 +1918,7 @@ export default function AgentsPage() {
                       </span>
                     </div>
                     <p className="text-xs mt-0.5" style={{ color: '#5F6368' }}>
-                      {AGENT_DESC[currentAgent.type] || currentAgent.type}
+                      {AGENT_DESC[currentAgent.type]?.[language as 'en' | 'it'] || currentAgent.type}
                     </p>
                   </div>
                 </div>
@@ -1624,10 +2001,10 @@ export default function AgentsPage() {
                         Inizia una conversazione con {currentAgent.name}
                       </h3>
                       <p className="text-sm leading-relaxed mb-8" style={{ color: '#5F6368' }}>
-                        {AGENT_DESC[currentAgent.type] || 'Agente AI personalizzato'}
+                        {AGENT_DESC[currentAgent.type]?.[language as 'en' | 'it'] || (language === 'en' ? 'Custom AI Agent' : 'Agente AI personalizzato')}
                       </p>
                       <div className="grid grid-cols-1 gap-2 w-full text-left">
-                        {(STARTER_PROMPTS[currentAgent.type] || STARTER_PROMPTS['strategy']).map((prompt, i) => (
+                        {((STARTER_PROMPTS[currentAgent.type] || STARTER_PROMPTS['strategy'])[language as 'en' | 'it']).map((prompt, i) => (
                           <button
                             key={i}
                             onClick={() => setInput(prompt)}
@@ -1697,7 +2074,7 @@ export default function AgentsPage() {
                                   <div key={idx} className={`border border-[#DADCE0] border-l-[3px] ${statusColor} rounded-r-lg p-2.5 space-y-1 bg-white/60 font-mono text-[10px]`}>
                                     <div className="flex items-center justify-between">
                                       <span className="text-[#1A73E8] font-bold">
-                                        {log.includes('⚙️') ? '🔧 STRUMENTO' : log.includes('🧠') ? '🧠 MEMORIA' : log.includes('📊') ? '📊 METRICHE/PATTERN' : '⚙️ STEP'}
+                                        {log.includes('⚙️') ? '🔧 TOOL' : log.includes('🧠') ? '🧠 MEMORY' : log.includes('📊') ? '📊 METRICS/PATTERNS' : '⚙️ STEP'}
                                       </span>
                                       <span className={isError ? 'text-[#EA4335]' : 'text-[#34A853]'}>
                                         {isError ? 'ERROR/WARNING' : 'INFO'}
@@ -1722,6 +2099,19 @@ export default function AgentsPage() {
                                 : null
                           }
                         </div>
+
+                        {/* Interactive Form Request */}
+                        {!isUser && msg.form && (
+                          <AgentInteractiveForm
+                            form={msg.form}
+                            messageId={String(msg.timestamp.getTime())}
+                            isAlreadySubmitted={!!formSubmittedValues[String(msg.timestamp.getTime())]}
+                            onSubmitResponse={(text) => {
+                              setFormSubmittedValues(prev => ({ ...prev, [String(msg.timestamp.getTime())]: true }));
+                              performSendMessage(text);
+                            }}
+                          />
+                        )}
 
                         {/* Timestamp */}
                         <div className="flex items-center gap-1 mt-2" style={{ fontSize: '0.6875rem', color: isUser ? 'rgba(255,255,255,0.6)' : '#9AA0AC' }}>
@@ -1805,7 +2195,7 @@ export default function AgentsPage() {
                       value={input}
                       onChange={e => setInput(e.target.value)}
                       onKeyDown={handleKeyDown}
-                      placeholder={`Scrivi a ${currentAgent.name}...`}
+                      placeholder={language === 'en' ? `Message ${currentAgent.name}...` : `Scrivi a ${currentAgent.name}...`}
                       rows={1}
                       className="flex-1 pl-6 pr-4 py-3.5 bg-transparent resize-none focus:outline-none text-sm placeholder-gray-500 font-medium"
                       style={{ color: '#202124', minHeight: '52px', maxHeight: '160px', lineHeight: '20px' }}
@@ -1827,7 +2217,7 @@ export default function AgentsPage() {
                   </div>
                 </div>
                 <p className="text-center mt-2 text-[10px]" style={{ color: '#9AA0AC' }}>
-                  Premi Enter per inviare · Shift+Enter per andare a capo
+                  {language === 'en' ? 'Press Enter to send · Shift+Enter for new line' : 'Premi Enter per inviare · Shift+Enter per andare a capo'}
                 </p>
               </div>
             </>
@@ -1837,9 +2227,13 @@ export default function AgentsPage() {
               <div className="max-w-5xl mx-auto mb-8 animate-fade-in">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-[#E8EAED] pb-6 mb-6">
                   <div>
-                    <h1 className="text-2xl font-bold text-[#202124] tracking-tight">Dashboard Dipendenti AI</h1>
+                    <h1 className="text-2xl font-bold text-[#202124] tracking-tight">
+                      {language === 'en' ? 'AI Employees Dashboard' : 'Dashboard Dipendenti AI'}
+                    </h1>
                     <p className="text-sm text-[#5F6368] mt-1">
-                      Visualizza, gestisci e coordina il tuo team di agenti intelligenti specializzati.
+                      {language === 'en'
+                        ? 'Manage, train, and coordinate your specialized AI employee team.'
+                        : 'Visualizza, gestisci e coordina il tuo team di agenti intelligenti specializzati.'}
                     </p>
                   </div>
                   <button
@@ -1849,54 +2243,27 @@ export default function AgentsPage() {
                     style={{ background: 'linear-gradient(135deg, #1A73E8, #34A853)' }}
                   >
                     <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                      <path d="M19 13h-6v6-2v-6H5v-2h6V5h2v6h6v2z"/>
+                      <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
                     </svg>
-                    Nuovo Dipendente
+                    {language === 'en' ? 'New Employee' : 'Nuovo Dipendente'}
                   </button>
                 </div>
 
                 {/* Statistics Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-8">
+                <div className="flex flex-wrap gap-5 mb-8">
                   {/* Stat 1 */}
-                  <div className="bg-white p-5 rounded-2xl border border-[#E8EAED] shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
+                  <div className="bg-white p-5 rounded-2xl border border-[#E8EAED] shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow w-full max-w-sm">
                     <div className="w-12 h-12 rounded-xl bg-[#E8F0FE] flex items-center justify-center text-xl text-[#1A73E8] font-bold">
                       👥
                     </div>
                     <div>
-                      <div className="text-[10px] uppercase font-bold tracking-wider text-[#9AA0AC]">Totale Dipendenti</div>
-                      <div className="text-xl font-bold text-[#202124] mt-0.5">{agentsList.length} / 6</div>
-                      <div className="text-[10px] text-[#5F6368] mt-0.5">Agenti operativi pronti</div>
-                    </div>
-                  </div>
-
-                  {/* Stat 2 */}
-                  <div className="bg-white p-5 rounded-2xl border border-[#E8EAED] shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-                    <div className="w-12 h-12 rounded-xl bg-[#E6F4EA] flex items-center justify-center text-xl text-[#34A853] font-bold">
-                      📊
-                    </div>
-                    <div>
-                      <div className="text-[10px] uppercase font-bold tracking-wider text-[#9AA0AC]">Dipartimenti Coperti</div>
-                      <div className="text-xl font-bold text-[#202124] mt-0.5">
-                        {agentsList.length > 0 ? Math.round((new Set(agentsList.map(a => a.type)).size / 6) * 100) : 0}%
+                      <div className="text-[10px] uppercase font-bold tracking-wider text-[#9AA0AC]">
+                        {language === 'en' ? 'Total Employees' : 'Totale Dipendenti'}
                       </div>
+                      <div className="text-xl font-bold text-[#202124] mt-0.5">{agentsList.length}</div>
                       <div className="text-[10px] text-[#5F6368] mt-0.5">
-                        {new Set(agentsList.map(a => a.type)).size} di 6 dipartimenti attivi
+                        {language === 'en' ? 'Active team members' : 'Dipendenti attivi nel team'}
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Stat 3 */}
-                  <div className="bg-white p-5 rounded-2xl border border-[#E8EAED] shadow-sm flex items-center gap-4 hover:shadow-md transition-shadow">
-                    <div className="w-12 h-12 rounded-xl bg-[#FEF7E0] flex items-center justify-center text-xl text-[#F9AB00] font-bold">
-                      ⚡
-                    </div>
-                    <div>
-                      <div className="text-[10px] uppercase font-bold tracking-wider text-[#9AA0AC]">Stato Team</div>
-                      <div className="text-xl font-bold text-[#34A853] mt-0.5 flex items-center gap-1.5">
-                        <span className="w-2.5 h-2.5 rounded-full bg-[#34A853] animate-pulse" />
-                        Attivo
-                      </div>
-                      <div className="text-[10px] text-[#5F6368] mt-0.5">Pronti per la delega di compiti</div>
                     </div>
                   </div>
                 </div>
@@ -1908,7 +2275,7 @@ export default function AgentsPage() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {Object.entries(AGENT_TYPE_CONFIG).map(([type, cfg]) => {
                     const matchingAgent = agentsList.find(a => a.type === type);
-                    const desc = AGENT_DESC[type] || 'Dipartimento operativo della startup';
+                    const desc = AGENT_DESC[type]?.[language as 'en' | 'it'] || (language === 'en' ? 'Operational department of the startup' : 'Dipartimento operativo della startup');
                     const iconMap: Record<string, string> = {
                       strategy: '🎯',
                       tech: '⚙️',
@@ -1991,7 +2358,7 @@ export default function AgentsPage() {
                                 e.currentTarget.style.borderColor = '#DADCE0';
                               }}
                             >
-                              ➕ Crea Dipendente
+                              ➕ Create Employee
                             </button>
                           )}
                         </div>
@@ -2004,11 +2371,13 @@ export default function AgentsPage() {
                 <div className="mt-8 bg-gradient-to-r from-[#EEF2FF] to-[#E0E7FF] p-6 rounded-2xl border border-[#C7D2FE] flex items-start gap-4">
                   <div className="text-3xl">💡</div>
                   <div>
-                    <h3 className="font-bold text-sm text-[#1E3A8A] mb-1">Collaborazione Interdisciplinare</h3>
+                    <h3 className="font-bold text-sm text-[#1E3A8A] mb-1">
+                      Interdisciplinary Collaboration
+                    </h3>
                     <p className="text-xs text-[#3730A3] leading-relaxed">
-                      Il tuo CoFounder virtuale può delegare compiti complessi a questi agenti in background. 
-                      Ad esempio, se chiedi al CoFounder un'analisi finanziaria avanzata, interrogherà automaticamente l'agente Finance 
-                      e sintetizzerà il risultato per te!
+                      Your virtual CoFounder can delegate complex tasks to these agents in the background. 
+                      For example, if you ask the CoFounder for an advanced financial analysis, it will automatically query the Finance agent 
+                      and synthesize the result for you!
                     </p>
                   </div>
                 </div>
@@ -2271,7 +2640,7 @@ export default function AgentsPage() {
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 text-blue-600" style={{ color: '#1A73E8' }}>
                 <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
               </svg>
-              <span className="font-semibold text-sm text-gray-800" style={{ color: '#202124' }}>Configurazione Strumenti</span>
+              <span className="font-semibold text-sm text-gray-800" style={{ color: '#202124' }}>Configurazione Agente</span>
             </div>
             <button
               onClick={() => setShowToolsPanel(false)}
@@ -2285,153 +2654,522 @@ export default function AgentsPage() {
             </button>
           </div>
 
+          {/* Tab Selector */}
+          <div className="flex border-b border-gray-200 bg-gray-50 flex-shrink-0 select-none" style={{ borderBottom: '1px solid #E8EAED', background: '#F8F9FA' }}>
+            <button
+              onClick={() => setActiveConfigTab('tools')}
+              className="flex-1 py-2.5 text-xs font-semibold border-b-2 text-center transition-colors focus:outline-none"
+              style={{
+                color: activeConfigTab === 'tools' ? '#1A73E8' : '#5F6368',
+                borderBottomColor: activeConfigTab === 'tools' ? '#1A73E8' : 'transparent',
+              }}
+            >
+              Strumenti
+            </button>
+            <button
+              onClick={() => setActiveConfigTab('prompt')}
+              className="flex-1 py-2.5 text-xs font-semibold border-b-2 text-center transition-colors focus:outline-none"
+              style={{
+                color: activeConfigTab === 'prompt' ? '#1A73E8' : '#5F6368',
+                borderBottomColor: activeConfigTab === 'prompt' ? '#1A73E8' : 'transparent',
+              }}
+            >
+              Istruzioni (Prompt)
+            </button>
+          </div>
+
           {/* Panel Body */}
           <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
-            <p className="text-xs text-gray-500 leading-relaxed mb-1" style={{ color: '#5F6368' }}>
-              Abilita o disabilita gli strumenti disponibili per <strong>{currentAgent.name}</strong>. Puoi anche personalizzare le istruzioni/descrizioni inviate al modello per descrivere come utilizzare lo strumento.
-            </p>
+            {activeConfigTab === 'tools' ? (
+              <>
+                <p className="text-xs text-gray-500 leading-relaxed mb-1" style={{ color: '#5F6368' }}>
+                  Abilita o disabilita gli strumenti disponibili per <strong>{currentAgent.name}</strong>. Puoi anche personalizzare le istruzioni/descrizioni inviate al modello per descrivere come utilizzare lo strumento.
+                </p>
 
-            {savingSettings && (
-              <div className="py-1 px-2 text-[10px] font-semibold text-blue-600 bg-blue-50 rounded flex items-center gap-1.5 animate-pulse" style={{ background: '#E8F0FE', color: '#1A73E8' }}>
-                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" style={{ background: '#1A73E8' }} />
-                Salvataggio configurazione in corso...
-              </div>
-            )}
+                {savingSettings && (
+                  <div className="py-1 px-2 text-[10px] font-semibold text-blue-600 bg-blue-50 rounded flex items-center gap-1.5 animate-pulse" style={{ background: '#E8F0FE', color: '#1A73E8' }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" style={{ background: '#1A73E8' }} />
+                    Salvataggio configurazione in corso...
+                  </div>
+                )}
 
-            <div className="space-y-3">
-              {AVAILABLE_TOOLS.map(tool => {
-                const settingsObj = currentAgent.settings || {};
-                const enabledTools = settingsObj.enabledTools || [
-                  "get_knowledge_pattern_details",
-                  "webSearch",
-                  "getStartupInfo",
-                  "getCustomMetrics",
-                  "readWebPage"
-                ];
-                const isEnabled = enabledTools.includes(tool.name);
-                const customDesc = settingsObj.customDescriptions?.[tool.name] || '';
-                const isCustomized = !!customDesc;
-                const isExpanded = expandedToolCustomization === tool.name;
+                <div className="space-y-3">
+                  {getAvailableTools(language).map(tool => {
+                    const settingsObj = currentAgent.settings || {};
+                    const enabledTools = settingsObj.enabledTools || [
+                      "get_knowledge_pattern_details",
+                      "webSearch",
+                      "getStartupInfo",
+                      "getCustomMetrics",
+                      "readWebPage"
+                    ];
+                    const isEnabled = enabledTools.includes(tool.name);
+                    const customDesc = settingsObj.customDescriptions?.[tool.name] || '';
+                    const isCustomized = !!customDesc;
+                    const isExpanded = expandedToolCustomization === tool.name;
 
-                return (
-                  <div
-                    key={tool.name}
-                    className="p-3.5 rounded-xl border border-gray-200 transition-all bg-white"
-                    style={{
-                      border: '1px solid #E8EAED',
-                      boxShadow: '0 1px 2px rgba(60,64,67,0.05)',
-                      background: isEnabled ? '#FFFFFF' : '#F8F9FA',
-                      opacity: isEnabled ? 1 : 0.8
-                    }}
-                  >
-                    {/* Tool Info Row */}
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex items-center gap-2.5">
-                        <span className="text-lg flex-shrink-0">{tool.icon}</span>
-                        <div>
-                          <h4 className="font-semibold text-xs text-gray-800" style={{ color: '#202124' }}>
-                            {tool.label}
-                          </h4>
-                          <span className="font-mono text-[9px] text-gray-400" style={{ color: '#9AA0AC' }}>
-                            {tool.name}
-                          </span>
-                        </div>
-                      </div>
-
-                      {/* Toggle Switch */}
-                      <button
-                        onClick={() => toggleTool(tool.name)}
-                        className="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                    return (
+                      <div
+                        key={tool.name}
+                        className="p-3.5 rounded-xl border border-gray-200 transition-all bg-white"
                         style={{
-                          backgroundColor: isEnabled ? '#1A73E8' : '#DADCE0'
+                          border: '1px solid #E8EAED',
+                          boxShadow: '0 1px 2px rgba(60,64,67,0.05)',
+                          background: isEnabled ? '#FFFFFF' : '#F8F9FA',
+                          opacity: isEnabled ? 1 : 0.8
                         }}
                       >
-                        <span
-                          className="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
-                          style={{
-                            transform: isEnabled ? 'translateX(16px)' : 'translateX(0)'
-                          }}
-                        />
-                      </button>
-                    </div>
+                        {/* Tool Info Row */}
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-center gap-2.5">
+                            <span className="text-lg flex-shrink-0">{tool.icon}</span>
+                            <div>
+                              <h4 className="font-semibold text-xs text-gray-800" style={{ color: '#202124' }}>
+                                {tool.label}
+                              </h4>
+                              <span className="font-mono text-[9px] text-gray-400" style={{ color: '#9AA0AC' }}>
+                                {tool.name}
+                              </span>
+                            </div>
+                          </div>
 
-                    {/* Tool Description */}
-                    <p className="text-[11px] text-gray-600 mt-2 leading-relaxed" style={{ color: '#5F6368' }}>
-                      {isCustomized ? customDesc : tool.defaultDescription}
-                    </p>
+                          {/* Toggle Switch */}
+                          <button
+                            onClick={() => toggleTool(tool.name)}
+                            className="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none"
+                            style={{
+                              backgroundColor: isEnabled ? '#1A73E8' : '#DADCE0'
+                            }}
+                          >
+                            <span
+                              className="pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out"
+                              style={{
+                                transform: isEnabled ? 'translateX(16px)' : 'translateX(0)'
+                              }}
+                            />
+                          </button>
+                        </div>
 
-                    {/* Meta info / custom indicator */}
-                    <div className="mt-3 flex items-center justify-between text-[10px] text-gray-400 border-t border-gray-100 pt-2.5" style={{ borderTop: '1px solid #F1F3F4' }}>
-                      <span className="font-mono" style={{ color: '#9AA0AC' }}>
-                        Parametri: <span className="font-medium">{tool.parameters}</span>
-                      </span>
+                        {/* Tool Description */}
+                        <p className="text-[11px] text-gray-600 mt-2 leading-relaxed" style={{ color: '#5F6368' }}>
+                          {isCustomized ? customDesc : tool.defaultDescription}
+                        </p>
 
-                      {isEnabled && (
-                        <button
-                          onClick={() => {
-                            if (isExpanded) {
-                              setExpandedToolCustomization(null);
-                            } else {
-                              setExpandedToolCustomization(tool.name);
-                              setCustomDescriptionText(customDesc || tool.defaultDescription);
-                            }
-                          }}
-                          className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-0.5"
-                          style={{ color: '#1A73E8' }}
-                        >
-                          {isCustomized ? '⚙️ Personalizzato' : 'Personalizza'}
-                        </button>
-                      )}
-                    </div>
+                        {/* Meta info / custom indicator */}
+                        <div className="mt-3 flex items-center justify-between text-[10px] text-gray-400 border-t border-gray-100 pt-2.5" style={{ borderTop: '1px solid #F1F3F4' }}>
+                          <span className="font-mono" style={{ color: '#9AA0AC' }}>
+                            Parametri: <span className="font-medium">{tool.parameters}</span>
+                          </span>
 
-                    {/* Customization Form Drawer */}
-                    {isExpanded && isEnabled && (
-                      <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2.5 animate-fade-in" style={{ background: '#F8F9FA', border: '1px solid #E8EAED' }}>
-                        <label className="block text-[9px] font-semibold text-gray-500 uppercase tracking-wide" style={{ color: '#5F6368' }}>
-                          Istruzione di Sistema per lo Strumento
-                        </label>
-                        <textarea
-                          rows={3}
-                          value={customDescriptionText}
-                          onChange={e => setCustomDescriptionText(e.target.value)}
-                          className="w-full p-2 bg-white rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          style={{ border: '1px solid #DADCE0', color: '#202124' }}
-                          placeholder="Fornisci istruzioni su come l'agente deve usare questo strumento..."
-                        />
-                        <div className="flex justify-end gap-2 text-[10px]">
-                          {isCustomized && (
+                          {isEnabled && (
                             <button
-                              onClick={() => resetCustomDescription(tool.name)}
-                              className="px-2 py-1.5 rounded bg-white border border-red-200 text-red-600 hover:bg-red-50 font-semibold"
-                              style={{ color: '#EA4335', borderColor: '#FCE8E6' }}
+                              onClick={() => {
+                                if (isExpanded) {
+                                  setExpandedToolCustomization(null);
+                                } else {
+                                  setExpandedToolCustomization(tool.name);
+                                  setCustomDescriptionText(customDesc || tool.defaultDescription);
+                                }
+                              }}
+                              className="text-blue-600 hover:text-blue-700 font-semibold flex items-center gap-0.5"
+                              style={{ color: '#1A73E8' }}
                             >
-                              Reimposta
+                              {isCustomized ? '⚙️ Personalizzato' : 'Personalizza'}
                             </button>
                           )}
-                          <button
-                            onClick={() => setExpandedToolCustomization(null)}
-                            className="px-2.5 py-1.5 rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 font-medium"
-                            style={{ borderColor: '#DADCE0', color: '#5F6368' }}
-                          >
-                            Annulla
-                          </button>
-                          <button
-                            onClick={() => saveCustomDescription(tool.name, customDescriptionText)}
-                            className="px-2.5 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 font-medium"
-                            style={{ background: '#1A73E8' }}
-                          >
-                            Salva
-                          </button>
+                        </div>
+
+                        {/* Customization Form Drawer */}
+                        {isExpanded && isEnabled && (
+                          <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200 space-y-2.5 animate-fade-in" style={{ background: '#F8F9FA', border: '1px solid #E8EAED' }}>
+                            <label className="block text-[9px] font-semibold text-gray-500 uppercase tracking-wide" style={{ color: '#5F6368' }}>
+                              Istruzione di Sistema per lo Strumento
+                            </label>
+                            <textarea
+                              rows={3}
+                              value={customDescriptionText}
+                              onChange={e => setCustomDescriptionText(e.target.value)}
+                              className="w-full p-2 bg-white rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                              style={{ border: '1px solid #DADCE0', color: '#202124' }}
+                              placeholder="Fornisci istruzioni su come l'agente deve usare questo strumento..."
+                            />
+                            <div className="flex justify-end gap-2 text-[10px]">
+                              {isCustomized && (
+                                <button
+                                  onClick={() => resetCustomDescription(tool.name)}
+                                  className="px-2 py-1.5 rounded bg-white border border-red-200 text-red-600 hover:bg-red-50 font-semibold"
+                                  style={{ color: '#EA4335', borderColor: '#FCE8E6' }}
+                                >
+                                  Reimposta
+                                </button>
+                              )}
+                              <button
+                                onClick={() => setExpandedToolCustomization(null)}
+                                className="px-2.5 py-1.5 rounded bg-white border border-gray-300 text-gray-600 hover:bg-gray-100 font-medium"
+                                style={{ borderColor: '#DADCE0', color: '#5F6368' }}
+                              >
+                                Annulla
+                              </button>
+                              <button
+                                onClick={() => saveCustomDescription(tool.name, customDescriptionText)}
+                                className="px-2.5 py-1.5 rounded bg-blue-600 text-white hover:bg-blue-700 font-medium"
+                                style={{ background: '#1A73E8' }}
+                              >
+                                Salva
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-xs text-gray-500 leading-relaxed mb-1" style={{ color: '#5F6368' }}>
+                  Gestisci il <strong>System Prompt</strong> e l'<strong>Expertise</strong> (competenze) per <strong>{currentAgent.name}</strong>. Puoi rigenerare le istruzioni dell'agente tramite l'addestramento automatico basato sulla ricerca web.
+                </p>
+
+                {isPromptSaving && (
+                  <div className="py-1 px-2 text-[10px] font-semibold text-blue-600 bg-blue-50 rounded flex items-center gap-1.5 animate-pulse" style={{ background: '#E8F0FE', color: '#1A73E8' }}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-ping" style={{ background: '#1A73E8' }} />
+                    Salvataggio prompt in corso...
+                  </div>
+                )}
+
+                <div className="space-y-3">
+                {/* Sub-tab Selector */}
+                <div className="flex border border-gray-200 rounded-lg p-0.5 bg-gray-100 flex-shrink-0 select-none mb-4" style={{ borderColor: '#E8EAED', background: '#F1F3F4' }}>
+                  <button
+                    onClick={() => setPromptSubTab('editor')}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md text-center transition-all focus:outline-none"
+                    style={{
+                      background: promptSubTab === 'editor' ? '#FFFFFF' : 'transparent',
+                      color: promptSubTab === 'editor' ? '#1A73E8' : '#5F6368',
+                      boxShadow: promptSubTab === 'editor' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                    }}
+                  >
+                    ✏️ Modifica
+                  </button>
+                  <button
+                    onClick={() => {
+                      setPromptSubTab('preview');
+                      fetchPromptPreview(currentAgent.id);
+                    }}
+                    className="flex-1 py-1.5 text-[11px] font-semibold rounded-md text-center transition-all focus:outline-none"
+                    style={{
+                      background: promptSubTab === 'preview' ? '#FFFFFF' : 'transparent',
+                      color: promptSubTab === 'preview' ? '#1A73E8' : '#5F6368',
+                      boxShadow: promptSubTab === 'preview' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none'
+                    }}
+                  >
+                    👁️ Prompt Completo
+                  </button>
+                </div>
+
+                {promptSubTab === 'editor' ? (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1" style={{ color: '#202124' }}>System Prompt</label>
+                      <textarea
+                        value={systemPromptText}
+                        onChange={e => setSystemPromptText(e.target.value)}
+                        placeholder="System prompt dell'agente..."
+                        rows={8}
+                        className="w-full px-2.5 py-2 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124', resize: 'vertical' }}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-semibold mb-1" style={{ color: '#202124' }}>Expertise (Competenze)</label>
+                      <textarea
+                        value={expertiseText}
+                        onChange={e => setExpertiseText(e.target.value)}
+                        placeholder="Expertise dell'agente (usata per addestramento)..."
+                        rows={4}
+                        className="w-full px-2.5 py-2 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-sans"
+                        style={{ background: '#FFFFFF', border: '1px solid #DADCE0', color: '#202124', resize: 'vertical' }}
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-2 pt-1">
+                      <button
+                        onClick={handleSavePrompt}
+                        disabled={isPromptSaving}
+                        className="w-full py-2 rounded-lg text-xs font-semibold text-white transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                        style={{ background: '#1A73E8' }}
+                      >
+                        {isPromptSaving ? 'Salvataggio...' : 'Salva Modifiche'}
+                      </button>
+                      <button
+                        onClick={() => startAgentTraining(currentAgent.id, expertiseText, currentAgent.name, currentAgent.type)}
+                        disabled={isTraining || !expertiseText.trim()}
+                        className="w-full py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50 flex items-center justify-center gap-1"
+                        style={{ background: '#F1F3F4', color: '#1A73E8', border: '1px solid #E8EAED' }}
+                      >
+                        <span>🔄 Regenerate with Web Search</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <p className="text-[10px] text-gray-500 italic leading-relaxed" style={{ color: '#5F6368' }}>
+                      This is the exact full prompt sent to the AI model with each message (including startup info, enabled tools, and invariant agentic instructions).
+                    </p>
+                    {loadingPreview ? (
+                      <div className="py-8 flex flex-col items-center justify-center gap-2 text-xs text-blue-600 bg-blue-50 rounded-lg animate-pulse" style={{ background: '#E8F0FE', color: '#1A73E8' }}>
+                        <span className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                        Generating full preview...
+                      </div>
+                    ) : (
+                      <div className="rounded-xl p-3.5 border font-mono text-[10px] overflow-x-auto whitespace-pre-wrap max-h-[380px] overflow-y-auto leading-relaxed select-text" style={{ background: '#1e1e1e', color: '#d4d4d4', borderColor: '#333333' }}>
+                        {previewPromptText || 'Nessun prompt disponibile.'}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                  <div className="pt-2 space-y-3">
+                    {/* Collapsible Fonti di Conoscenza */}
+                    <details className="group border border-gray-200 rounded-lg p-2.5 bg-gray-50 [&_summary::-webkit-details-marker]:hidden" style={{ border: '1px solid #E8EAED', background: '#F8F9FA' }}>
+                      <summary className="flex items-center justify-between text-xs font-semibold text-gray-700 cursor-pointer focus:outline-none">
+                        <span className="flex items-center gap-1.5 select-none">
+                          📚 Fonti di Conoscenza ({trainingSources.length})
+                        </span>
+                        <span className="transition group-open:-rotate-180">
+                          <svg fill="none" height="18" name="chevron" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24" width="18"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                        </span>
+                      </summary>
+                      <div className="mt-2.5 space-y-1.5 text-xs text-gray-600">
+                        {trainingSources.length === 0 ? (
+                          <p className="italic text-[11px] text-gray-400">Nessuna fonte registrata.</p>
+                        ) : (
+                          trainingSources.map((source, index) => (
+                            <div key={index} className="flex flex-col gap-0.5 border-b border-gray-100 pb-1.5 last:border-b-0 last:pb-0">
+                              <span className="font-medium text-gray-800 text-[11px] truncate">{source.title || 'Senza titolo'}</span>
+                              <a
+                                href={source.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-[10px] text-blue-600 hover:underline truncate"
+                                style={{ color: '#1A73E8' }}
+                              >
+                                {source.url}
+                              </a>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </details>
+
+                    {/* Statistiche di Addestramento */}
+                    {trainingStats && (
+                      <div className="p-3 border border-gray-200 rounded-lg bg-gray-50 space-y-1.5 text-xs text-gray-600" style={{ border: '1px solid #E8EAED', background: '#F8F9FA' }}>
+                        <h5 className="font-semibold text-gray-700 select-none">📊 Statistiche di Addestramento</h5>
+                        <div className="grid grid-cols-2 gap-2 text-[11px]">
+                          <div>
+                            <span className="text-gray-400 block">Pagine lette:</span>
+                            <span className="font-semibold text-gray-800">{trainingStats.pagesRead || 0}</span>
+                          </div>
+                          <div>
+                            <span className="text-gray-400 block">Caratteri letti:</span>
+                            <span className="font-semibold text-gray-800">
+                              {trainingStats.totalChars ? (trainingStats.totalChars / 1000).toFixed(1) + ' KB' : '0 KB'}
+                            </span>
+                          </div>
+                          <div className="col-span-2">
+                            <span className="text-gray-400 block">Data addestramento:</span>
+                            <span className="font-semibold text-gray-800">
+                              {trainingStats.trainedAt ? new Date(trainingStats.trainedAt).toLocaleString('it-IT') : 'N/A'}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     )}
                   </div>
-                );
-              })}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Training Overlay Modal ────────────────────────────────────── */}
+      {(isTraining || trainingPhase !== 'idle') && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#202124]/40 backdrop-blur-md">
+          <div className="w-full max-w-xl bg-white/90 border border-white/20 rounded-2xl shadow-2xl p-6 flex flex-col max-h-[85vh] backdrop-blur-lg animate-fade-in" style={{ background: 'rgba(255, 255, 255, 0.9)', boxShadow: '0 24px 54px rgba(0,0,0,0.15)', border: '1px solid rgba(255,255,255,0.2)' }}>
+            
+            {/* Header */}
+            <div className="flex items-center gap-3 border-b border-gray-200 pb-3 flex-shrink-0" style={{ borderBottom: '1px solid #E8EAED' }}>
+              <span className="text-2xl">🧠</span>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-sm text-gray-900 truncate" style={{ color: '#202124' }}>
+                  Addestramento Agente Esperto
+                </h3>
+                <p className="text-xs text-gray-500 truncate" style={{ color: '#5F6368' }}>
+                  {selectedAgent ? agentsList.find((a: any) => a.id === selectedAgent)?.name : ''}
+                </p>
+              </div>
             </div>
+
+            {/* Current Phase & Status */}
+            <div className="mt-4 flex-shrink-0">
+              <div className="text-[11px] font-semibold uppercase tracking-wider text-gray-400 mb-1.5" style={{ color: '#9AA0AC' }}>
+                Stato Corrente
+              </div>
+              <div className="font-medium text-xs text-gray-800" style={{ color: '#202124' }}>
+                {trainingProgress || 'Inizializzazione...'}
+              </div>
+              
+              {/* Progress steps indicator */}
+              <div className="flex items-center justify-between w-full my-5 px-2">
+                {[
+                  { key: 'queries', label: 'Queries' },
+                  { key: 'searching', label: 'Ricerca' },
+                  { key: 'reading', label: 'Lettura' },
+                  { key: 'generating', label: 'Sintesi' },
+                  { key: 'testing', label: 'Verifica' },
+                  { key: 'done', label: 'Fine' }
+                ].map((s, idx) => {
+                  const activeStepIdx = getPhaseStepIndex(trainingPhase);
+                  const isCompleted = idx < activeStepIdx;
+                  const isActive = idx === activeStepIdx;
+                  
+                  let statusColor = '#DADCE0'; // default gray
+                  let textWeight = 'normal';
+                  let textColor = '#5F6368';
+                  
+                  if (trainingPhase === 'error') {
+                    if (idx === activeStepIdx) {
+                      statusColor = '#EA4335'; // red for error
+                      textColor = '#EA4335';
+                      textWeight = 'semibold';
+                    } else if (idx < activeStepIdx) {
+                      statusColor = '#34A853'; // green
+                      textColor = '#202124';
+                    }
+                  } else {
+                    if (isCompleted) {
+                      statusColor = '#34A853'; // green
+                      textColor = '#202124';
+                    } else if (isActive) {
+                      statusColor = '#1A73E8'; // blue
+                      textColor = '#1A73E8';
+                      textWeight = 'semibold';
+                    }
+                  }
+
+                  return (
+                    <div key={s.key} className="flex flex-col items-center flex-1 relative select-none">
+                      {/* Connector Line */}
+                      {idx > 0 && (
+                        <div
+                          className="absolute top-2.5 -left-1/2 right-1/2 h-[2px] -translate-y-1/2 z-0"
+                          style={{
+                            background: (trainingPhase === 'error' && idx === activeStepIdx) 
+                              ? '#EA4335'
+                              : idx <= activeStepIdx ? '#34A853' : '#DADCE0'
+                          }}
+                        />
+                      )}
+                      {/* Dot */}
+                      <div
+                        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] text-white font-semibold z-10 transition-all ${isActive && trainingPhase !== 'error' ? 'animate-pulse' : ''}`}
+                        style={{ background: statusColor }}
+                      >
+                        {isCompleted ? '✓' : idx + 1}
+                      </div>
+                      {/* Label */}
+                      <span className="text-[10px] mt-1.5 transition-colors" style={{ color: textColor, fontWeight: textWeight }}>
+                        {s.label}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Terminal Viewport */}
+            <div className="flex flex-col flex-1 min-h-[160px] max-h-[300px] mt-2">
+              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1 select-none" style={{ color: '#5F6368' }}>
+                Log di Addestramento
+              </div>
+              <div
+                ref={logContainerRef}
+                className="flex-1 overflow-y-auto p-4 rounded-xl font-mono text-[10px] text-[#00E676] bg-[#0c0c0c] border border-black/20 custom-scrollbar selection:bg-[#00E676] selection:text-black space-y-1"
+              >
+                {trainingLog.length === 0 ? (
+                  <div className="text-[#6e7681] italic">Inizializzazione log in corso...</div>
+                ) : (
+                  trainingLog.map((log, idx) => (
+                    <div key={idx} className="whitespace-pre-wrap leading-relaxed">
+                      {log}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* Footer Summary & Actions */}
+            <div className="mt-5 pt-4 border-t border-gray-200 flex flex-col gap-3 flex-shrink-0" style={{ borderTop: '1px solid #E8EAED' }}>
+              {trainingPhase === 'done' && (
+                <>
+                  <div className="p-3 rounded-lg bg-green-50 border border-green-200 text-xs text-green-800 space-y-2" style={{ background: '#E6F4EA', borderColor: '#CEEAD6', color: '#137333' }}>
+                    <span className="font-semibold block">🎉 Training completed!</span>
+                    <p className="text-[11px] leading-relaxed">
+                      Pages analyzed: <strong>{trainingStats?.pagesRead || 0}</strong>,{' '}
+                      Characters: <strong>{trainingStats?.totalChars ? (trainingStats.totalChars / 1000).toFixed(1) + ' KB' : '0 KB'}</strong>,{' '}
+                      Prompt Length: <strong>{trainingStats?.promptLength || 0}</strong> characters.
+                    </p>
+                    {identityTestResult && (
+                      <div className="mt-2 border-t border-green-200 pt-2 text-[11px]">
+                        <span className="font-semibold block text-green-900">🧪 Identity Test Result:</span>
+                        <p className="italic text-gray-700 bg-white/70 p-2 rounded border border-green-100/55 mt-1 font-mono leading-relaxed select-text">{identityTestResult}</p>
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTrainingPhase('idle')}
+                    className="w-full py-2 rounded-lg text-xs font-semibold text-white transition-colors"
+                    style={{ background: '#34A853' }}
+                  >
+                    Close & Save
+                  </button>
+                </>
+              )}
+
+              {trainingPhase === 'error' && (
+                <>
+                  <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-xs text-red-800 space-y-1" style={{ background: '#FCE8E6', borderColor: '#FAD2CF', color: '#C5221F' }}>
+                    <span className="font-semibold block">⚠️ An error occurred</span>
+                    <p className="text-[11px]">The training process was interrupted.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setTrainingPhase('idle')}
+                    className="w-full py-2 rounded-lg text-xs font-semibold text-white transition-colors"
+                    style={{ background: '#EA4335' }}
+                  >
+                    Chiudi
+                  </button>
+                </>
+              )}
+
+              {!['done', 'error'].includes(trainingPhase) && (
+                <div className="flex items-center justify-center gap-2 py-2 text-xs text-gray-500 font-medium animate-pulse" style={{ color: '#5F6368' }}>
+                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" style={{ background: '#1A73E8' }} />
+                  Addestramento in corso... Non chiudere questa finestra.
+                </div>
+              )}
+            </div>
+
           </div>
         </div>
       )}
     </div>
   );
 }
+

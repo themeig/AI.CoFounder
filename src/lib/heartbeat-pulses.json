@@ -1,0 +1,115 @@
+{
+  "pulses": [
+    {
+      "id": "pulse-briefing-1785454513202",
+      "type": "action",
+      "title": "🎙️ Daily Standup di Oggi (30 lug)",
+      "body": "La riunione del team è completata. Il coFounder ed i dipendenti hanno elaborato 3 priorità operative per oggi.",
+      "priority": "high",
+      "read": false,
+      "createdAt": "2026-07-30T23:35:13.203Z",
+      "actionUrl": "/dashboard/dashboard",
+      "actionText": "Vedi Riunione"
+    },
+    {
+      "id": "pulse-briefing-1785454219323",
+      "type": "action",
+      "title": "🎙️ Daily Standup di Oggi (30 lug)",
+      "body": "La riunione del team è completata. Il coFounder ed i dipendenti hanno elaborato 3 priorità operative per oggi.",
+      "priority": "high",
+      "read": false,
+      "createdAt": "2026-07-30T23:30:19.327Z",
+      "actionUrl": "/dashboard/dashboard",
+      "actionText": "Vedi Riunione"
+    },
+    {
+      "id": "pulse-1785453769549-0",
+      "type": "positive",
+      "title": "Analisi completata con successo",
+      "body": "Tutte le metriche finanziarie e operative rientrano nei parametri di crescita previsti per la fase attuale.",
+      "priority": "low",
+      "read": true,
+      "createdAt": "2026-07-30T23:22:49.549Z",
+      "actionUrl": "/dashboard/metrics",
+      "actionText": "Visualizza Dashboard"
+    },
+    {
+      "id": "pulse-1785453769549-1",
+      "type": "idea",
+      "title": "Ottimizzazione strategie di acquisizione",
+      "body": "Consigliata una revisione delle campagne marketing per sfruttare l'elevato LTV del settore.",
+      "priority": "medium",
+      "read": true,
+      "createdAt": "2026-07-30T23:22:49.549Z",
+      "actionUrl": "/dashboard/agents",
+      "actionText": "Parla con il Marketing Agent"
+    },
+    {
+      "id": "pulse-1785453644544-0",
+      "type": "positive",
+      "title": "Analisi completata con successo",
+      "body": "Tutte le metriche finanziarie e operative rientrano nei parametri di crescita previsti per la fase attuale.",
+      "priority": "low",
+      "read": true,
+      "createdAt": "2026-07-30T23:20:44.544Z",
+      "actionUrl": "/dashboard/metrics",
+      "actionText": "Visualizza Dashboard"
+    },
+    {
+      "id": "pulse-1785453644544-1",
+      "type": "idea",
+      "title": "Ottimizzazione strategie di acquisizione",
+      "body": "Consigliata una revisione delle campagne marketing per sfruttare l'elevato LTV del settore.",
+      "priority": "medium",
+      "read": true,
+      "createdAt": "2026-07-30T23:20:44.544Z",
+      "actionUrl": "/dashboard/agents",
+      "actionText": "Parla con il Marketing Agent"
+    },
+    {
+      "id": "pulse-init-1",
+      "type": "warning",
+      "title": "Monitoraggio Churn Rate",
+      "body": "Rilevata una lieve flessione nella retention delle nuove coorti. Si suggerisce di verificare il primo onboarding degli utenti.",
+      "priority": "high",
+      "read": true,
+      "createdAt": "2026-07-30T22:35:18.146Z",
+      "actionUrl": "/dashboard/metrics",
+      "actionText": "Vedi Metriche Churn"
+    },
+    {
+      "id": "pulse-init-2",
+      "type": "idea",
+      "title": "Opportunità Upsell: Tier Enterprise",
+      "body": "Oltre il 30% degli utenti attivi utilizza le funzionalità avanzate quotidianamente. Potresti introdurre un piano dedicato ai team.",
+      "priority": "medium",
+      "read": true,
+      "createdAt": "2026-07-30T20:20:18.148Z",
+      "actionUrl": "/dashboard/agents",
+      "actionText": "Pianifica con CoFounder"
+    },
+    {
+      "id": "pulse-init-3",
+      "type": "positive",
+      "title": "Rapporto LTV/CAC eccellente (4.8x)",
+      "body": "Il valore generato da ciascun cliente è 4.8 volte superiore al costo di acquisizione, posizionando la startup sopra il benchmark di settore.",
+      "priority": "low",
+      "read": true,
+      "createdAt": "2026-07-30T17:20:18.148Z",
+      "actionUrl": "/dashboard/metrics",
+      "actionText": "Esplora Analytics"
+    },
+    {
+      "id": "pulse-init-4",
+      "type": "action",
+      "title": "Pianificazione Runway & Fundraising",
+      "body": "Con 14 mesi di runway rimanenti, questo è il trimestre ideale per preparare la dataroom e contattare i primi investitori angel.",
+      "priority": "high",
+      "read": true,
+      "createdAt": "2026-07-30T11:20:18.148Z",
+      "actionUrl": "/dashboard/memory",
+      "actionText": "Consulta Playbook Funding"
+    }
+  ],
+  "lastRunAt": "2026-07-30T23:22:49.580Z"
+}

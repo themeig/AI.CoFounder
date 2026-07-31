@@ -1,4 +1,4 @@
-// Impostazioni globali dell'applicazione
+﻿// Impostazioni globali dell'applicazione
 // Si vedono in Settings page
 
 export interface AppSettings {
@@ -54,7 +54,7 @@ export interface KnowledgeSettings {
 }
 
 export const DEFAULT_APP_SETTINGS: AppSettings = {
-  defaultModel: 'openrouter/owl-alpha',
+  defaultModel: 'openrouter/free',
   cofounderName: 'coFounder',
   memorySettings: {
     contextMessages: 20,
@@ -70,3 +70,4 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   },
   useTavily: false,
 };
+

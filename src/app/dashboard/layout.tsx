@@ -1,14 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LanguageProvider, useTranslation } from "@/lib/i18n/LanguageContext";
 
-const navItems = [
+const navItemsDef = [
   {
     href: "/dashboard",
-    label: "Home",
+    key: "home",
+    defaultLabel: "Home",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
         <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z"/>
@@ -17,7 +19,8 @@ const navItems = [
   },
   {
     href: "/dashboard/cofounder",
-    label: "CoFounder",
+    key: "cofounder",
+    defaultLabel: "CoFounder",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
         <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
@@ -26,7 +29,8 @@ const navItems = [
   },
   {
     href: "/dashboard/agents",
-    label: "Dipendenti",
+    key: "employees",
+    defaultLabel: "Employees",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
         <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
@@ -35,7 +39,8 @@ const navItems = [
   },
   {
     href: "/dashboard/startup",
-    label: "Startup",
+    key: "startup",
+    defaultLabel: "Startup",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
         <path d="M13 2.05v2.02c3.95.49 7 3.85 7 7.93 0 3.21-1.81 6-4.72 7.28L13 17v5h5l-1.22-1.22C19.91 19.07 22 15.76 22 12c0-5.18-3.95-9.45-9-9.95zM11 2.05C5.95 2.55 2 6.82 2 12c0 3.76 2.09 7.07 5.22 8.78L6 22h5V2.05z"/>
@@ -43,8 +48,19 @@ const navItems = [
     ),
   },
   {
+    href: "/dashboard/stakeholders",
+    key: "stakeholders",
+    defaultLabel: "Stakeholders",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M12 2a3 3 0 0 0-3 3c0 .38.08.74.21 1.07L6.86 8.42A3.003 3.003 0 0 0 5 8a3 3 0 1 0 3 3c0-.38-.08-.74-.21-1.07l2.35-2.35c.28.08.57.12.86.12s.58-.04.86-.12l2.35 2.35c-.13.33-.21.69-.21 1.07a3 3 0 1 0 4.86-2.42l-2.35-2.35C16.92 5.74 17 5.38 17 5a3 3 0 0 0-5-3z"/>
+      </svg>
+    ),
+  },
+  {
     href: "/dashboard/metrics",
-    label: "Metriche",
+    key: "metrics",
+    defaultLabel: "Metrics",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
         <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
@@ -53,7 +69,8 @@ const navItems = [
   },
   {
     href: "/dashboard/memory",
-    label: "Memoria",
+    key: "memory",
+    defaultLabel: "Memory",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
         <path d="M12 2c-4.42 0-8 3.58-8 8 0 2.93 1.58 5.5 3.93 6.93V21h8.14v-4.07C18.42 15.5 20 12.93 20 10c0-4.42-3.58-8-8-8zm2 14.5v2.5h-4v-2.5C7.36 15.16 6 12.71 6 10c0-3.31 2.69-6 6-6s6 2.69 6 6c0 2.71-1.36 5.16-4 6.5z"/>
@@ -62,7 +79,8 @@ const navItems = [
   },
   {
     href: "/dashboard/settings",
-    label: "Impostazioni",
+    key: "settings",
+    defaultLabel: "Settings",
     icon: (
       <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
         <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38-1.03.7-1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
@@ -71,9 +89,10 @@ const navItems = [
   },
 ];
 
-export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+function DashboardContent({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
+  const { language, setLanguage, t } = useTranslation();
   const [loading, setLoading] = useState(true);
   const [demoUser, setDemoUser] = useState<any>(null);
 
@@ -113,6 +132,30 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     );
   };
 
+  const [heartbeatUnread, setHeartbeatUnread] = useState(0);
+
+  const fetchUnreadHeartbeat = () => {
+    fetch("/api/demo/heartbeat/unread")
+      .then((res) => res.json())
+      .then((data) => {
+        if (typeof data.unreadCount === "number") {
+          setHeartbeatUnread(data.unreadCount);
+        }
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    fetchUnreadHeartbeat();
+    const interval = setInterval(fetchUnreadHeartbeat, 20000);
+    const handleUpdate = () => fetchUnreadHeartbeat();
+    window.addEventListener("heartbeat-updated", handleUpdate);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("heartbeat-updated", handleUpdate);
+    };
+  }, []);
+
   useEffect(() => {
     const cookies = document.cookie.split("; ");
     const demoUserId = cookies.find((c) => c.startsWith("demo_user_id="));
@@ -131,7 +174,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#F8F9FA" }}>
         <div className="flex flex-col items-center gap-3">
           <div className="w-8 h-8 rounded-full border-2 border-[#1A73E8] border-t-transparent animate-spin" />
-          <p className="text-sm" style={{ color: "#5F6368" }}>Caricamento...</p>
+          <p className="text-sm" style={{ color: "#5F6368" }}>{t("common.loading", "Loading...")}</p>
         </div>
       </div>
     );
@@ -141,7 +184,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-screen flex" style={{ background: "#F8F9FA" }}>
-      {/* ── Left Sidebar Wrapper (prevents layout shift) ─────────── */}
+      {/* ── Left Sidebar Wrapper ─────────────────────────── */}
       <div
         className="flex-shrink-0 h-screen sticky top-0 transition-all duration-200"
         style={{
@@ -166,14 +209,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               flexShrink: 0
             }}
           >
-            {/* Logo text & Icon wrapper */}
             <div className={`flex items-center min-w-0 ${isExpanded ? "gap-2.5 flex-1" : "justify-center"}`}>
               {!isExpanded ? (
                 <button
                   onClick={toggleSidebar}
                   className="w-8 h-8 rounded-lg flex items-center justify-center transition-all flex-shrink-0 hover:bg-[#E8EAED] text-[#5F6368] hover:text-[#1A73E8]"
                   style={{ background: "#F1F3F4" }}
-                  title="Espandi menu"
+                  title="Expand menu"
                 >
                   <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
                     <path d="M8.59 16.59L10 18l6-6-6-6-1.41 1.41L13.17 12z"/>
@@ -199,13 +241,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               )}
             </div>
 
-            {/* Collapse button */}
             {isExpanded && (
               <button
                 onClick={toggleSidebar}
                 className="w-7 h-7 rounded-lg flex items-center justify-center transition-all flex-shrink-0 hover:bg-[#E8EAED]"
                 style={{ background: "#F1F3F4", color: "#5F6368" }}
-                title="Comprimi menu"
+                title="Collapse menu"
               >
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
                   <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
@@ -216,8 +257,9 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
           {/* Navigation */}
           <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto custom-scrollbar">
-            {navItems.map((item) => {
+            {navItemsDef.map((item) => {
               const isActive = pathname.startsWith(item.href) && (item.href !== "/dashboard" || pathname === "/dashboard");
+              const label = t(`nav.${item.key}`, item.defaultLabel);
               return (
                 <Link
                   key={item.href}
@@ -247,9 +289,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       color: isActive ? "#1A73E8" : "#5F6368",
                       transition: "color 0.15s",
                     }}
-                    className="flex-shrink-0 w-5 h-5 flex items-center justify-center"
+                    className="flex-shrink-0 w-5 h-5 flex items-center justify-center relative"
                   >
                     {item.icon}
+                    {!isExpanded && item.key === "home" && heartbeatUnread > 0 && (
+                      <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#EA4335] ring-2 ring-white animate-pulse" />
+                    )}
                   </span>
                   <span
                     className="transition-all duration-200 whitespace-nowrap overflow-hidden"
@@ -259,9 +304,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                       transform: isExpanded ? "translateX(0)" : "translateX(-10px)",
                     }}
                   >
-                    {item.label}
+                    {label}
                   </span>
-                  {isExpanded && isActive && (
+                  {isExpanded && item.key === "home" && heartbeatUnread > 0 && (
+                    <span
+                      className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold text-white flex items-center justify-center min-w-[20px] leading-none shadow-xs animate-pulse"
+                      style={{ background: "#EA4335" }}
+                      title={`${heartbeatUnread} nuovi avvisi da leggere`}
+                    >
+                      {heartbeatUnread}
+                    </span>
+                  )}
+                  {isExpanded && isActive && !(item.key === "home" && heartbeatUnread > 0) && (
                     <div
                       className="ml-auto w-1.5 h-1.5 rounded-full flex-shrink-0"
                       style={{ background: "#1A73E8" }}
@@ -272,10 +326,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             })}
           </nav>
 
-          {/* Footer */}
-          <div className="py-3 px-3" style={{ borderTop: "1px solid #E8EAED" }}>
+          {/* Footer with User Profile */}
+          <div className="py-3 px-3 space-y-2" style={{ borderTop: "1px solid #E8EAED" }}>
+
             {/* User profile */}
-            <div className="flex items-center rounded-lg mb-1 px-3.5 py-2.5 gap-2.5" style={{ background: "#F8F9FA" }}>
+            <div className="flex items-center rounded-lg px-3.5 py-2.5 gap-2.5" style={{ background: "#F8F9FA" }}>
               <div
                 className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 text-white"
                 style={{ background: "#1A73E8" }}
@@ -308,7 +363,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               style={{ color: "#EA4335" }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#FCE8E6")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              title={!isExpanded ? "Esci" : ""}
+              title={!isExpanded ? "Logout" : ""}
             >
               <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">
                 <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
@@ -322,7 +377,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                   width: isExpanded ? "auto" : "0px",
                 }}
               >
-                Esci
+                {"Logout"}
               </span>
             </button>
           </div>
@@ -336,3 +391,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     </div>
   );
 }
+
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <LanguageProvider>
+      <DashboardContent>{children}</DashboardContent>
+    </LanguageProvider>
+  );
+}
+

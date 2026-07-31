@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
 import * as path from "path";
+import { getStripeMetrics } from "@/lib/connectors/stripe";
+import { hasApiKey } from "@/lib/secure-store";
 
 const METRICS_FILE_PATH = path.join(process.cwd(), "src/lib/custom-metrics.json");
 
@@ -74,12 +76,93 @@ async function saveMetricsData(data: any) {
 
 /**
  * GET /api/demo/metrics
- * Returns all startup metrics.
+ * Returns all startup metrics (merging live Stripe metrics if configured).
  */
 export async function GET() {
   try {
     const data = await getMetricsData();
-    return NextResponse.json(data);
+
+    // Check if Stripe is connected
+    const stripeConfigured = await hasApiKey("stripe");
+    let stripeMetrics = null;
+
+    if (stripeConfigured) {
+      try {
+        stripeMetrics = await getStripeMetrics();
+      } catch (err) {
+        console.error("[GET /api/demo/metrics] Error fetching Stripe metrics:", err);
+      }
+    }
+
+    // Merge or update Stripe metrics into the metric list if available
+    let mergedData = [...data];
+
+    if (stripeMetrics) {
+      const stripeCards = [
+        {
+          id: "metric-stripe-mrr",
+          title: "MRR (Stripe Live)",
+          value: `${stripeMetrics.currency === "EUR" ? "€" : "$"}${stripeMetrics.mrr.toLocaleString()}`,
+          type: "currency",
+          chartType: "line",
+          data: stripeMetrics.monthlyHistory.map(h => h.mrr),
+          labels: stripeMetrics.monthlyHistory.map(h => h.label),
+          formula: "Σ Stripe Active Subscriptions (Normalized Monthly)",
+          isDefault: true,
+          source: "stripe",
+          lastSyncAt: stripeMetrics.lastSyncAt
+        },
+        {
+          id: "metric-stripe-churn",
+          title: "Monthly Churn (Stripe)",
+          value: `${stripeMetrics.churnRate}%`,
+          type: "percentage",
+          chartType: "bar",
+          data: stripeMetrics.monthlyHistory.map(h => h.churn),
+          labels: stripeMetrics.monthlyHistory.map(h => h.label),
+          formula: "Stripe Canceled Subscriptions / Active Customers",
+          isDefault: true,
+          source: "stripe",
+          lastSyncAt: stripeMetrics.lastSyncAt
+        },
+        {
+          id: "metric-stripe-ltv",
+          title: "Customer LTV (Stripe)",
+          value: `${stripeMetrics.currency === "EUR" ? "€" : "$"}${stripeMetrics.ltv.toLocaleString()}`,
+          type: "currency",
+          chartType: "gauge",
+          data: [stripeMetrics.ltv],
+          formula: "ARPU / Monthly Churn Rate",
+          isDefault: true,
+          source: "stripe",
+          lastSyncAt: stripeMetrics.lastSyncAt
+        },
+        {
+          id: "metric-stripe-customers",
+          title: "Active Customers (Stripe)",
+          value: stripeMetrics.activeCustomers.toString(),
+          type: "integer",
+          chartType: "line",
+          data: stripeMetrics.monthlyHistory.map(h => h.customers),
+          labels: stripeMetrics.monthlyHistory.map(h => h.label),
+          formula: "Stripe Active Customers Count",
+          isDefault: true,
+          source: "stripe",
+          lastSyncAt: stripeMetrics.lastSyncAt
+        }
+      ];
+
+      for (const card of stripeCards) {
+        const existingIdx = mergedData.findIndex((m: any) => m.id === card.id);
+        if (existingIdx !== -1) {
+          mergedData[existingIdx] = { ...mergedData[existingIdx], ...card };
+        } else {
+          mergedData.unshift(card);
+        }
+      }
+    }
+
+    return NextResponse.json(mergedData);
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

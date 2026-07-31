@@ -96,7 +96,7 @@ Rispondi esclusivamente con un oggetto JSON valido contenente la seguente strutt
         "X-Title": "AgentFoundry-OmniMemory",
       },
       body: JSON.stringify({
-        model: "openrouter/owl-alpha",
+        model: "openrouter/free",
         messages: [{ role: "user", content: prompt }],
         temperature: 0.3, // low temperature for structured tasks
       }),

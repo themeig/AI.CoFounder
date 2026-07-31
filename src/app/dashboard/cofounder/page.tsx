@@ -4,6 +4,8 @@ import { useState, useRef, useEffect } from 'react';
 import ModelSelector from '@/components/ModelSelector';
 import Link from 'next/link';
 import { DEFAULT_APP_SETTINGS } from '@/lib/settings';
+import { useTranslation } from '@/lib/i18n/LanguageContext';
+import { globalStreamManager, startChatStream } from '@/lib/global-stream-manager';
 
 interface AgentDelegation {
   agentType: string;
@@ -758,14 +760,40 @@ function InlineArtifactCard({
   );
 }
 
-function ToolItem({ tool }: { tool: any }) {
+function ToolItem({ tool, onSubmitResponse }: { tool: any; onSubmitResponse?: (text: string) => void }) {
   const [showArgs, setShowArgs] = useState(false);
+  const [formValues, setFormValues] = useState<Record<string, any>>({});
+  const [formSubmitted, setFormSubmitted] = useState(false);
+  
   const hasArgs = tool.arguments && Object.keys(tool.arguments).length > 0;
   const isSuccess = tool.success;
+  const isFormTool = tool.name === 'requestInformationForm' && isSuccess && tool.result;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!onSubmitResponse) return;
+
+    const title = tool.result.title || "Richiesta Informazioni";
+    const fields = tool.result.fields || [];
+    
+    let formattedText = `Risposte fornite per il modulo "${title}":\n`;
+    fields.forEach((field: any) => {
+      const val = formValues[field.id];
+      const displayVal = val === undefined || val === '' ? "(Non fornito)" : String(val);
+      formattedText += `- **${field.label}**: ${displayVal}\n`;
+    });
+
+    onSubmitResponse(formattedText);
+    setFormSubmitted(true);
+  };
+
+  const handleFieldChange = (fieldId: string, val: any) => {
+    setFormValues(prev => ({ ...prev, [fieldId]: val }));
+  };
 
   return (
-    <div className={`border border-gray-200/80 ${isSuccess ? 'border-l-[3px] border-l-green-500' : 'border-l-[3px] border-l-red-500'} rounded-r-lg p-2.5 bg-white shadow-2xs`}>
-      <div className="flex items-center justify-between font-mono text-[9px] mb-1">
+    <div className={`border border-gray-200/80 ${isSuccess ? 'border-l-[3px] border-l-green-500' : 'border-l-[3px] border-l-red-500'} rounded-r-lg p-3 bg-white shadow-2xs space-y-2`}>
+      <div className="flex items-center justify-between font-mono text-[9px]">
         <span className="text-blue-600 font-bold flex items-center gap-1">
           <span>🔧</span> {tool.name}
         </span>
@@ -784,7 +812,78 @@ function ToolItem({ tool }: { tool: any }) {
           </span>
         </div>
       </div>
+      
       <p className="text-[10px] text-gray-600 font-medium leading-relaxed">{tool.details}</p>
+
+      {/* Render custom interactive form if this is a requestInformationForm tool */}
+      {isFormTool && (
+        <div className="mt-3 p-3 rounded-xl border border-blue-100 bg-blue-50/20 text-xs space-y-2.5 text-left">
+          <div className="flex items-center gap-1.5 border-b border-blue-100 pb-2">
+            <span className="text-base">📋</span>
+            <div>
+              <h4 className="font-bold text-gray-800">{tool.result.title}</h4>
+              <p className="text-[10px] text-gray-500 mt-0.5">{tool.result.description}</p>
+            </div>
+          </div>
+
+          {formSubmitted ? (
+            <div className="py-2 flex items-center gap-2 text-green-600 font-semibold text-[11px] animate-fade-in">
+              <span>✓</span> Risposte inviate con successo al modello!
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-3">
+              {(tool.result.fields || []).map((field: any) => (
+                <div key={field.id} className="space-y-1">
+                  <label className="block text-[10px] font-bold text-gray-600">
+                    {field.label} {field.required && <span className="text-red-500">*</span>}
+                  </label>
+
+                  {field.type === 'select' ? (
+                    <select
+                      value={formValues[field.id] || ''}
+                      onChange={e => handleFieldChange(field.id, e.target.value)}
+                      required={field.required}
+                      className="w-full px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    >
+                      <option value="">Seleziona un'opzione...</option>
+                      {(field.options || []).map((opt: string) => (
+                        <option key={opt} value={opt}>{opt}</option>
+                      ))}
+                    </select>
+                  ) : field.type === 'boolean' ? (
+                    <select
+                      value={formValues[field.id] !== undefined ? String(formValues[field.id]) : ''}
+                      onChange={e => handleFieldChange(field.id, e.target.value === 'true')}
+                      required={field.required}
+                      className="w-full px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    >
+                      <option value="">Seleziona...</option>
+                      <option value="true">Sì</option>
+                      <option value="false">No</option>
+                    </select>
+                  ) : (
+                    <input
+                      type={field.type === 'number' ? 'number' : 'text'}
+                      value={formValues[field.id] || ''}
+                      placeholder={field.placeholder || ''}
+                      onChange={e => handleFieldChange(field.id, field.type === 'number' ? Number(e.target.value) : e.target.value)}
+                      required={field.required}
+                      className="w-full px-2 py-1.5 rounded-lg border border-gray-200 bg-white text-xs focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                    />
+                  )}
+                </div>
+              ))}
+
+              <button
+                type="submit"
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[10px] transition-colors flex items-center gap-1 mt-2 shadow-sm"
+              >
+                <span>🚀</span> Invia Informazioni
+              </button>
+            </form>
+          )}
+        </div>
+      )}
       
       {showArgs && hasArgs && (
         <pre className="mt-2 p-2 rounded border border-gray-200 bg-gray-50/50 text-[9px] font-mono text-gray-700 overflow-x-auto max-h-40">
@@ -802,7 +901,8 @@ function ThinkingContainer({
   thinkingTime,
   activeToolLabel,
   activeDelegations,
-  activeThinkingTime
+  activeThinkingTime,
+  onSubmitResponse
 }: { 
   thinking?: string; 
   tools?: any[]; 
@@ -811,15 +911,9 @@ function ThinkingContainer({
   activeToolLabel?: string | null;
   activeDelegations?: any[];
   activeThinkingTime?: string;
+  onSubmitResponse?: (text: string) => void;
 }) {
-  const [isOpen, setIsOpen] = useState(true);
-
-  // Auto-expand while streaming
-  useEffect(() => {
-    if (isStreaming) {
-      setIsOpen(true);
-    }
-  }, [isStreaming]);
+  const [isOpen, setIsOpen] = useState(false);
 
   const hasTools = tools && tools.length > 0;
   const hasDelegations = activeDelegations && activeDelegations.length > 0;
@@ -936,7 +1030,7 @@ function ThinkingContainer({
             <div className="space-y-2">
               <div className="text-[9px] font-bold text-gray-400 uppercase tracking-wider">Strumenti eseguiti:</div>
               {tools.map((t, i) => (
-                <ToolItem key={i} tool={t} />
+                <ToolItem key={i} tool={t} onSubmitResponse={onSubmitResponse} />
               ))}
             </div>
           )}
@@ -953,7 +1047,8 @@ export default function CoFounderPage() {
   const [activeDiscussionId, setActiveDiscussionId] = useState<string | null>(null);
   const [editingDiscussionId, setEditingDiscussionId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState('');
-  const [selectedModel, setSelectedModel] = useState('openrouter/owl-alpha');
+  const { t, language } = useTranslation();
+  const [selectedModel, setSelectedModel] = useState('openrouter/free');
   const [showSlashMenu, setShowSlashMenu] = useState(false);
   const [slashFilter, setSlashFilter] = useState('');
   const [startupInfo, setStartupInfo] = useState<any>(null);
@@ -962,6 +1057,60 @@ export default function CoFounderPage() {
   const activeDiscussionIdRef = useRef(activeDiscussionId);
   useEffect(() => {
     activeDiscussionIdRef.current = activeDiscussionId;
+  }, [activeDiscussionId]);
+
+  // ── Global Stream Manager Synchronization Effect ──
+  useEffect(() => {
+    if (!activeDiscussionId) return;
+
+    const handleStreamUpdate = (state: any) => {
+      setDiscussions(prev => prev.map(d => {
+        if (d.id === activeDiscussionId) {
+          const messages = [...d.messages];
+          const last = messages[messages.length - 1];
+          
+          let finalMessages = messages;
+          
+          // Construct the assistant message from state
+          const assistantMsg = {
+            role: 'assistant' as const,
+            content: state.content,
+            thinking: state.thinking,
+            timestamp: last && last.role === 'assistant' ? last.timestamp : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            tools: state.tools,
+            delegations: state.delegations,
+            agentSuggestion: state.agentSuggestion,
+            thinkingTime: state.thinkingTime,
+            isStreaming: state.isGenerating
+          };
+
+          if (last && last.role === 'assistant') {
+            finalMessages[messages.length - 1] = assistantMsg;
+          } else {
+            finalMessages = [...messages, assistantMsg];
+          }
+
+          return {
+            ...d,
+            messages: finalMessages,
+            isGenerating: state.isGenerating,
+            activeToolLabel: state.activeToolLabel,
+            activeDelegations: state.activeDelegations,
+          };
+        }
+        return d;
+      }));
+    };
+
+    if (activeDiscussionId) {
+      globalStreamManager.subscribe(activeDiscussionId, handleStreamUpdate);
+    }
+
+    return () => {
+      if (activeDiscussionId) {
+        globalStreamManager.unsubscribe(activeDiscussionId, handleStreamUpdate);
+      }
+    };
   }, [activeDiscussionId]);
 
   // Derived Active Discussion States
@@ -1169,7 +1318,7 @@ export default function CoFounderPage() {
 
       const isGenerating = activeDiscussion ? !!activeDiscussion.isGenerating : false;
       if (artifacts.length > prevArtifactCountRef.current && (prevArtifactCountRef.current > 0 || isGenerating || shouldAutoOpenWorkspaceRef.current)) {
-        setShowWorkspace(true);
+        // setShowWorkspace(true); // Don't auto-open workspace on new artifacts
         const lastArt = artifacts[artifacts.length - 1];
         setActiveArtifact(lastArt);
         setWorkspaceMode('preview');
@@ -1346,7 +1495,9 @@ export default function CoFounderPage() {
     const newId = 'disc_' + Math.random().toString(36).substring(2, 15);
     const welcomeMsg: CofounderMessage = {
       role: 'assistant',
-      content: `Ciao! Sono il tuo coFounder, l'assistente co-fondatore del tuo progetto. Posso aiutarti a gestire il team, creare agenti o aggiornare le metriche della startup in tempo reale. Cosa facciamo oggi?`,
+      content: language === "en"
+        ? "Hi! I am your AI CoFounder. I can help you manage your team, create specialized agents, or update startup metrics in real time. What should we tackle today?"
+        : "Ciao! Sono il tuo coFounder, l'assistente co-fondatore del tuo progetto. Posso aiutarti a gestire il team, creare agenti o aggiornare le metriche della startup in tempo reale. Cosa facciamo oggi?",
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     
@@ -1499,34 +1650,40 @@ export default function CoFounderPage() {
   // Queuing is handled inside each discussion independently
 
   const handleStopGeneration = (id: string) => {
-    const target = discussions.find(d => d.id === id);
-    if (target?.abortController) {
-      target.abortController.abort();
-    }
-
-    const interMsg: CofounderMessage = {
-      role: 'assistant',
-      content: '⏹ Generazione interrotta.',
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    };
-    
-    const updatedMessages = [...(target?.messages || []), interMsg];
+    globalStreamManager.abortStream(id);
 
     setDiscussions(prev => prev.map(d => {
       if (d.id === id) {
+        const messages = [...d.messages];
+        const last = messages[messages.length - 1];
+        let finalMessages = messages;
+        if (last && last.role === 'assistant') {
+          finalMessages[messages.length - 1] = {
+            ...last,
+            content: last.content + '\n⏹ Generazione interrotta.',
+            isStreaming: false
+          };
+        } else {
+          finalMessages.push({
+            role: 'assistant',
+            content: '⏹ Generazione interrotta.',
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            isStreaming: false
+          });
+        }
+        
+        saveChatForId(id, finalMessages);
+
         return {
           ...d,
           isGenerating: false,
           activeToolLabel: null,
           activeDelegations: [],
-          abortController: null,
-          messages: updatedMessages
+          messages: finalMessages
         };
       }
       return d;
     }));
-
-    saveChatForId(id, updatedMessages);
   };
 
   const handleSendMessage = async (e?: React.FormEvent, customText?: string, displayText?: string, targetId?: string) => {
@@ -1537,7 +1694,7 @@ export default function CoFounderPage() {
     const promptToSend = (customText || cofounderInput).trim();
     if (!promptToSend) return;
 
-    shouldAutoOpenWorkspaceRef.current = true;
+    shouldAutoOpenWorkspaceRef.current = false;
 
     if (!customText && !targetId) {
       setCofounderInput('');
@@ -1585,8 +1742,7 @@ export default function CoFounderPage() {
           generationStartTime: Date.now(),
           activeThinkingTime: '0.0',
           activeToolLabel: null,
-          activeDelegations: [],
-          abortController: controller
+          activeDelegations: []
         };
       }
       return d;
@@ -1594,188 +1750,43 @@ export default function CoFounderPage() {
 
     saveChatForId(currentActiveId, updatedWithUser, updatedTitle);
 
-    const startTime = Date.now();
+    const requestBody = {
+      messages: updatedWithUser.map(m => ({ role: m.role, content: m.content })),
+      cofounderName,
+      modelId: selectedModel,
+      settings,
+      discussionId: currentActiveId,
+      todos: discussions.find(d => d.id === currentActiveId)?.todos || []
+    };
 
-    try {
-      const res = await fetch('/api/demo/cofounder/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: updatedWithUser.map(m => ({ role: m.role, content: m.content })),
-          cofounderName,
-          modelId: selectedModel,
-          settings,
-          discussionId: currentActiveId,
-          todos: discussions.find(d => d.id === currentActiveId)?.todos || []
-        }),
-        signal: controller.signal
-      });
-
-      if (!res.ok) {
-        throw new Error(`Server returned status ${res.status}`);
-      }
-
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No body stream reader');
-
-      const decoder = new TextDecoder();
-      let streamBuffer = '';
-      let replyContent = '';
-      let replyThinking = '';
-      let replyTools: any[] = [];
-      let replyDelegations: any[] = [];
-      let replySuggestion: any = null;
-      let thinkingTimeVal: string | undefined = undefined;
-      let streamRenamedTitle: string | null = null;
-
-      // Temporary placeholder message while streaming
-      const assistantPlaceholder: CofounderMessage = {
+    startChatStream('/api/demo/cofounder/chat', currentActiveId, requestBody, async (finalState) => {
+      // Sincronizza stato e salva al termine dello stream
+      const finalMsg: CofounderMessage = {
         role: 'assistant',
-        content: '',
-        thinking: '',
+        content: finalState.content,
+        thinking: finalState.thinking,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        isStreaming: true,
+        tools: finalState.tools,
+        delegations: finalState.delegations,
+        agentSuggestion: finalState.agentSuggestion,
+        thinkingTime: finalState.thinkingTime,
+        isStreaming: false
       };
-      
-      setDiscussions(prev => prev.map(d => {
-        if (d.id === currentActiveId) {
-          return {
-            ...d,
-            messages: [...d.messages, assistantPlaceholder]
-          };
-        }
-        return d;
-      }));
 
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-
-        streamBuffer += decoder.decode(value, { stream: true });
-        const lines = streamBuffer.split('\n');
-        streamBuffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const jsonStr = line.slice(6).trim();
-          if (jsonStr === '[DONE]') continue;
-
-          try {
-            const parsed = JSON.parse(jsonStr);
-            const payload = parsed.content;
-
-            if (parsed.type === 'content') {
-              replyContent += payload;
-            } else if (parsed.type === 'thinking') {
-              replyThinking += payload;
-            } else if (parsed.type === 'rename_discussion') {
-              const newTitle = payload.title;
-              streamRenamedTitle = newTitle;
-              setDiscussions(prev => prev.map(d => {
-                if (d.id === currentActiveId) {
-                  return { ...d, title: newTitle };
-                }
-                return d;
-              }));
-            } else if (parsed.type === 'tool_start') {
-              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: payload.label } : d));
-            } else if (parsed.type === 'tool_end') {
-              const completedTool = payload;
-              if (!replyTools.some(t => t.name === completedTool.name && JSON.stringify(t.arguments) === JSON.stringify(completedTool.arguments))) {
-                replyTools.push(completedTool);
-              }
-              setDiscussions(prev => prev.map(d => {
-                if (d.id === currentActiveId) {
-                  const updatedDisc = { ...d, activeToolLabel: null };
-                  if (completedTool.name === 'todo' && completedTool.result?.todos) {
-                    updatedDisc.todos = completedTool.result.todos;
-                  }
-                  return updatedDisc;
-                }
-                return d;
-              }));
-            } else if (parsed.type === 'tool_run') {
-              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: null } : d));
-            } else if (parsed.type === 'delegating') {
-              const del = payload;
-              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeDelegations: [...(d.activeDelegations || []), { agentType: del.agentType, agentLabel: del.agentLabel, task: del.task, status: 'running' }] } : d));
-            } else if (parsed.type === 'delegation_done') {
-              const del = payload;
-              replyDelegations.push(del);
-              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeDelegations: (d.activeDelegations || []).map((ad: any) => ad.agentType === del.agentType ? { ...ad, status: 'done' } : ad) } : d));
-            } else if (parsed.type === 'agent_suggestion') {
-              replySuggestion = payload;
-            } else if (parsed.type === 'done') {
-              replyContent = payload.content;
-              replyTools = payload.executedTools || [];
-              replyDelegations = payload.delegations || [];
-              replySuggestion = payload.agentSuggestion;
-              thinkingTimeVal = ((Date.now() - startTime) / 1000).toFixed(1);
-              setDiscussions(prev => prev.map(d => {
-                if (d.id === currentActiveId) {
-                  return {
-                    ...d,
-                    activeToolLabel: null,
-                    todos: payload.todos || d.todos
-                  };
-                }
-                return d;
-              }));
-            } else if (parsed.type === 'error') {
-              setDiscussions(prev => prev.map(d => d.id === currentActiveId ? { ...d, activeToolLabel: null } : d));
-              throw new Error(payload);
-            }
-
-            // Update placeholder in real time
-            setDiscussions(prev => prev.map(d => {
-              if (d.id === currentActiveId) {
-                const messages = [...d.messages];
-                const last = messages[messages.length - 1];
-                if (last && last.role === 'assistant') {
-                  messages[messages.length - 1] = {
-                    ...last,
-                    content: replyContent,
-                    thinking: replyThinking,
-                    tools: replyTools,
-                    delegations: replyDelegations,
-                    agentSuggestion: replySuggestion,
-                    thinkingTime: thinkingTimeVal,
-                    isStreaming: true,
-                  };
-                }
-                return { ...d, messages };
-              }
-              return d;
-            }));
-          } catch (e) {
-            console.error('Failed to parse SSE data line:', jsonStr, e);
-          }
-        }
-      }
-
-      // Fetch agents list update in background to sync potential new agents
-      window.dispatchEvent(new Event('startup-agents-updated'));
-
-      // Fetch any new artifacts generated
-      if (currentActiveId === activeDiscussionIdRef.current) {
-        fetchArtifacts(currentActiveId);
-      }
-
-      // Final save and update message status (disable streaming flag)
       setDiscussions(prev => {
         const dIndex = prev.findIndex(d => d.id === currentActiveId);
         if (dIndex === -1) return prev;
 
         const d = prev[dIndex];
-        const messages = [...d.messages];
-        const last = messages[messages.length - 1];
-        let finalMessages = messages;
-        if (last && last.role === 'assistant') {
-          const finalMsg = { ...last, isStreaming: false };
-          finalMessages = [...messages.slice(0, -1), finalMsg];
+        const lastMsg = d.messages[d.messages.length - 1];
+        let finalMessages: CofounderMessage[];
+        if (lastMsg && lastMsg.role === 'assistant') {
+          finalMessages = [...d.messages.slice(0, -1), finalMsg];
+        } else {
+          finalMessages = [...d.messages, finalMsg];
         }
 
-        saveChatForId(currentActiveId, finalMessages, streamRenamedTitle || undefined);
+        saveChatForId(currentActiveId, finalMessages, finalState.renameTitle || undefined);
 
         const queue = d.promptQueue || [];
         const hasQueued = queue.length > 0;
@@ -1786,12 +1797,13 @@ export default function CoFounderPage() {
           ...d,
           isGenerating: hasQueued,
           generationStartTime: hasQueued ? Date.now() : undefined,
-          activeThinkingTime: hasQueued ? '0.0' : '0.0',
+          activeThinkingTime: '0.0',
           activeToolLabel: null,
           activeDelegations: [],
-          abortController: hasQueued ? d.abortController : null,
           messages: finalMessages,
-          promptQueue: updatedQueue
+          promptQueue: updatedQueue,
+          title: finalState.renameTitle || d.title,
+          todos: finalState.tools?.find((t: any) => t.name === 'todo')?.result?.todos || d.todos
         };
 
         if (hasQueued && nextPrompt) {
@@ -1803,8 +1815,11 @@ export default function CoFounderPage() {
         return prev.map(item => item.id === currentActiveId ? updatedDiscussion : item);
       });
 
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
+      window.dispatchEvent(new Event('startup-agents-updated'));
+      if (currentActiveId === activeDiscussionIdRef.current) {
+        fetchArtifacts(currentActiveId);
+      }
+    }).catch((err: any) => {
       console.error('SSE connection error:', err);
 
       const errorMsg: CofounderMessage = {
@@ -1846,7 +1861,7 @@ export default function CoFounderPage() {
 
         return prev.map(item => item.id === currentActiveId ? updatedDiscussion : item);
       });
-    }
+    });
   };
 
   const applySlashCommand = (cmd: string) => {
@@ -1912,18 +1927,18 @@ export default function CoFounderPage() {
   };
 
   const slashCommands = [
-    { cmd: '/analizza', desc: 'Analizza startup a 360° con tutti gli agenti' },
-    { cmd: '/agenti', desc: 'Mostra il team ed il loro stato' },
-    { cmd: '/metriche', desc: 'Overview metriche e salute finanziaria' },
-    { cmd: '/piano', desc: 'Piano di crescita 6 mesi (strategy + marketing + finance)' },
-    { cmd: '/clear', desc: 'Svuota la cronologia della chat corrente' },
+    { cmd: '/analizza', desc: 'Full 360° startup analysis with all agents' },
+    { cmd: '/agenti', desc: 'Show team status and agent list' },
+    { cmd: '/metriche', desc: 'Metrics overview and financial health' },
+    { cmd: '/piano', desc: '6-month growth plan (strategy + marketing + finance)' },
+    { cmd: '/clear', desc: 'Clear current discussion history' },
   ].filter(c => c.cmd.toLowerCase().includes(slashFilter));
 
   const starterCards = [
-    'Qual è il piano finanziario migliore per allungare la nostra runway?',
-    'Fai un audit completo della nostra architettura tecnologica',
-    'Preparami per un pitch davanti a degli investitori angel',
-    'Ideiamo una campagna marketing di lancio virale a costo zero'
+    'What is the best financial plan to extend our runway?',
+    'Do a complete audit of our tech architecture',
+    'Prepare me for an angel investor pitch',
+    'Brainstorm a zero-cost viral launch campaign'
   ];
 
   return (
@@ -1941,12 +1956,12 @@ export default function CoFounderPage() {
               boxShadow: '0 2px 4px rgba(26,115,232,0.2)'
             }}
           >
-            <span className="text-sm font-bold">＋</span> Nuova Conversazione
+            <span className="text-sm font-bold">＋</span> New Discussion
           </button>
 
           {/* Discussions Section */}
           <div className="flex flex-col space-y-2">
-            <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider px-1">Discussioni</h3>
+            <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider px-1">Discussions</h3>
             <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
               {discussions.map(d => {
                 const isActive = d.id === activeDiscussionId;
@@ -2060,11 +2075,11 @@ export default function CoFounderPage() {
             </div>
           ) : (
             <div className="p-4 text-center text-xs text-[#5F6368] rounded-xl border border-[#E8EAED]" style={{ background: '#FAFAFA' }}>
-              Caricamento startup...
+              Loading startup...
             </div>
           )}
 
-          {/* Roadmap di Sessione Card */}
+          {/* Session Roadmap Card */}
           {activeDiscussionId && (
             (() => {
               const activeDisc = discussions.find(d => d.id === activeDiscussionId);
@@ -2073,7 +2088,7 @@ export default function CoFounderPage() {
               return (
                 <div className="p-4 rounded-xl border border-[#E8EAED] space-y-3" style={{ background: '#FAFAFA' }}>
                   <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">Roadmap di Sessione</h3>
+                    <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider">Session Roadmap</h3>
                     {todos.length > 0 && (
                       <span className="text-[10px] bg-[#E8F0FE] text-[#1A73E8] px-1.5 py-0.5 rounded-full font-semibold">
                         {todos.filter((t: any) => t.status === 'completed').length}/{todos.length}
@@ -2082,7 +2097,7 @@ export default function CoFounderPage() {
                   </div>
                   {todos.length === 0 ? (
                     <p className="text-[11px] text-[#5F6368] italic leading-normal">
-                      Nessun task attivo. Chiedi un'analisi complessa o una roadmap al Co-Founder per iniziare.
+                      No active tasks. Ask the Co-Founder for a complex analysis or roadmap to get started.
                     </p>
                   ) : (
                     <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
@@ -2115,7 +2130,7 @@ export default function CoFounderPage() {
           )}
 
           <div className="p-4 rounded-xl border border-[#E8EAED]" style={{ background: '#FAFAFA' }}>
-            <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider mb-2">Comandi Rapidi</h3>
+            <h3 className="text-xs font-bold text-[#202124] uppercase tracking-wider mb-2">Quick Commands</h3>
             <div className="space-y-1">
               {['/analizza', '/agenti', '/metriche', '/piano', '/clear'].map(cmd => (
                 <button
@@ -2132,7 +2147,7 @@ export default function CoFounderPage() {
           <div className="flex-1" />
 
           <div className="p-3 text-[10px] text-[#9AA0AC] leading-normal border-t border-[#E8EAED]">
-            Il Co-Founder AI ha accesso alla memoria centralizzata ed è in grado di delegare compiti specifici al team di collaboratori.
+            The AI Co-Founder has access to centralized memory and can delegate specific tasks to team members.
           </div>
         </div>
       )}
@@ -2215,6 +2230,7 @@ export default function CoFounderPage() {
                     activeToolLabel={msg.isStreaming ? activeToolLabel : null}
                     activeDelegations={msg.isStreaming ? activeDelegations : []}
                     activeThinkingTime={activeThinkingTime}
+                    onSubmitResponse={(text) => handleSendMessage(undefined, text)}
                   />
                 )}
 
@@ -2258,24 +2274,24 @@ export default function CoFounderPage() {
                   <div className="mt-3 p-3 rounded-lg border border-[#FED7AA] bg-[#FFFBEB] animate-fade-in">
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <span className="text-xs">💡</span>
-                      <span className="text-[10px] font-bold text-[#92400E]">Suggerimento Creazione Dipendente</span>
+                      <span className="text-[10px] font-bold text-[#92400E]">Employee Agent Suggestion</span>
                     </div>
                     <p className="text-[10px] font-medium mb-1" style={{ color: '#202124' }}>
-                      Crea l'agente <strong>{msg.agentSuggestion.agentName}</strong> ({msg.agentSuggestion.agentLabel})
+                      Create agent <strong>{msg.agentSuggestion.agentName}</strong> ({msg.agentSuggestion.agentLabel})
                     </p>
                     <p className="text-[9px] mb-2.5" style={{ color: '#92400E' }}>{msg.agentSuggestion.reason}</p>
                     <div className="flex gap-1.5">
                       <button
-                        onClick={() => handleSendMessage(undefined, `Sì, crea l'agente ${msg.agentSuggestion!.agentName} di tipo ${msg.agentSuggestion!.agentType}`)}
+                        onClick={() => handleSendMessage(undefined, `Yes, create agent ${msg.agentSuggestion!.agentName} of type ${msg.agentSuggestion!.agentType}`)}
                         className="px-2 py-1 rounded bg-[#F97316] text-[9px] font-semibold text-white hover:bg-[#EA580C] transition"
                       >
-                        Approva Creazione
+                        Approve Creation
                       </button>
                       <button
-                        onClick={() => handleSendMessage(undefined, `No grazie, non creare l'agente ${msg.agentSuggestion!.agentName} per ora.`)}
+                        onClick={() => handleSendMessage(undefined, `No thanks, don't create agent ${msg.agentSuggestion!.agentName} for now.`)}
                         className="px-2 py-1 rounded bg-white border border-[#E8EAED] text-[9px] font-semibold text-[#5F6368] hover:bg-[#F1F3F4] transition"
                       >
-                        Ignora
+                        Ignore
                       </button>
                     </div>
                   </div>
@@ -2290,8 +2306,8 @@ export default function CoFounderPage() {
           {cofounderMessages.length <= 1 && !cofounderLoading && (
             <div className="py-8 text-center max-w-md mx-auto space-y-6">
               <div className="space-y-1.5">
-                <h3 className="font-bold text-sm text-[#202124]">Spunti di discussione con il Co-Founder</h3>
-                <p className="text-[11px] text-[#5F6368]">Seleziona una delle domande suggerite per iniziare ad impostare la tua crescita.</p>
+                <h3 className="font-bold text-sm text-[#202124]">Discussion Ideas with your Co-Founder</h3>
+                <p className="text-[11px] text-[#5F6368]">Select one of the suggested prompts to kickstart your growth.</p>
               </div>
               <div className="grid grid-cols-2 gap-3 text-left">
                 {starterCards.map((s, idx) => (
@@ -2638,7 +2654,7 @@ export default function CoFounderPage() {
                   {/* Console logs */}
                   <div className="flex-1 p-4 overflow-y-auto font-mono text-xs leading-relaxed text-[#00E676] bg-[#0c0c0c] custom-scrollbar selection:bg-[#00E676] selection:text-black">
                     {terminalLogs.length === 0 ? (
-                      <div className="text-[#6e7681] italic">Nessun log generato.</div>
+                      <div className="text-[#6e7681] italic">No logs generated.</div>
                     ) : (
                       terminalLogs.map((log, idx) => (
                         <div key={idx} className="whitespace-pre-wrap mb-1">
@@ -2652,7 +2668,7 @@ export default function CoFounderPage() {
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-6 text-[#6e7681] italic text-xs">
-              Nessun file aperto. Apri un blocco di codice dalla chat.
+              No file open. Click a code block from the chat to view.
             </div>
           )}
         </div>
@@ -2660,3 +2676,4 @@ export default function CoFounderPage() {
     </div>
   );
 }
+

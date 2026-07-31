@@ -4,7 +4,9 @@ import * as path from "path";
 import { getApiKey } from "@/lib/secure-store";
 import { getArtifacts, saveArtifacts } from "@/lib/custom-artifacts";
 import { executePython, executeTypeScript } from "@/lib/sandbox-runner";
-import { searchWeb, searchTavily, readWebPage } from "./web-utils";
+import { searchWeb, searchTavily, readWebPage, batchSearch, readWebPageDeep } from "./web-utils";
+import { runAgentTraining } from "../agents/trainer";
+import { getUpcomingCalendarEvents, createGoogleCalendarEvent } from "@/lib/connectors/gcal";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -60,7 +62,7 @@ function getAgentSystemPrompt(agentType: string): string {
   return prompts[agentType] || "Sei un assistente AI per startup. Rispondi in italiano.";
 }
 
-async function callAgentInternal(agentType: string, task: string, context: string, startup: any): Promise<{ response: string; success: boolean }> {
+async function callAgentInternal(agentType: string, task: string, context: string, startup: any, modelId?: string): Promise<{ response: string; success: boolean }> {
   try {
     let basePrompt = getAgentSystemPrompt(agentType);
     try {
@@ -82,45 +84,73 @@ ${context ? `\nContesto dal CoFounder:\n${context}` : ""}
 
 Sei un agente delegato dall'orchestratore CoFounder. Fornisci una risposta esperta, pratica e concisa. Sii diretto e actionable.`;
 
-    let res: Response | null = null;
-    let retryCount = 0;
-    const maxRetries = 3;
-    let delay = 1000;
-    while (retryCount < maxRetries) {
+    const fallbackModels = [
+      modelId,
+      "openrouter/free"
+    ].filter((m): m is string => !!m);
+
+    const uniqueModels = Array.from(new Set(fallbackModels));
+    let lastError = "";
+
+    for (const currentModel of uniqueModels) {
       try {
-        res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-            "Content-Type": "application/json",
-            "HTTP-Referer": "https://agentfoundry.ai",
-            "X-Title": "AgentFoundry Internal Delegation"
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: task }
-            ],
-            temperature: 0.7,
-            max_tokens: 1024,
-          })
-        });
-        if (res.ok) break;
-        if (res.status !== 429 && res.status < 500) break;
-      } catch {}
-      retryCount++;
-      if (retryCount < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, delay));
-        delay *= 2;
+        let res: Response | null = null;
+        let retryCount = 0;
+        const maxRetries = 2;
+        let delay = 500;
+
+        while (retryCount < maxRetries) {
+          try {
+            res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://agentfoundry.ai",
+                "X-Title": "AgentFoundry Internal Delegation"
+              },
+              body: JSON.stringify({
+                model: currentModel,
+                messages: [
+                  { role: "system", content: systemPrompt },
+                  { role: "user", content: task }
+                ],
+                temperature: 0.7,
+                max_tokens: 1024,
+              })
+            });
+            if (res.ok) break;
+          } catch {}
+          retryCount++;
+          if (retryCount < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
+        }
+
+        if (res && res.ok) {
+          const data = await res.json();
+          if (data.error) {
+            lastError = `Model ${currentModel} returned error: ${data.error.message || JSON.stringify(data.error)}`;
+            continue;
+          }
+          const content = data.choices?.[0]?.message?.content;
+          if (content && content.trim().length > 0) {
+            return { response: content, success: true };
+          } else {
+            lastError = `Model ${currentModel} returned empty response.`;
+            continue;
+          }
+        } else {
+          lastError = `Model ${currentModel} failed with status ${res ? res.status : "unknown"}.`;
+        }
+      } catch (err: any) {
+        lastError = `Model ${currentModel} throwed: ${err.message}`;
       }
     }
 
-    if (!res || !res.ok) throw new Error(`OpenRouter error: ${res ? res.status : "Failed"}`);
-    const data = await res.json();
-    return { response: data.choices?.[0]?.message?.content || "Nessuna risposta.", success: true };
+    return { response: `Errore di delega. Ultimo errore: ${lastError}`, success: false };
   } catch (err: any) {
-    return { response: `Errore: ${err.message}`, success: false };
+    return { response: `Errore delegatore: ${err.message}`, success: false };
   }
 }
 
@@ -157,7 +187,7 @@ registry.register({
     }
 
     const startTime = Date.now();
-    const delegationResult = await callAgentInternal(args.agentType, args.task, args.context || "", context.startup);
+    const delegationResult = await callAgentInternal(args.agentType, args.task, args.context || "", context.startup, context.modelId);
     const duration = ((Date.now() - startTime) / 1000).toFixed(1);
 
     const delegation = {
@@ -297,14 +327,17 @@ registry.register({
           type: { type: "string", enum: ["strategy", "tech", "finance", "marketing", "legal", "operations"], description: "La categoria / dipartimento dell'agente." },
           systemPrompt: { type: "string", description: "Prompt di sistema / istruzioni dettagliate per definire il comportamento, focus, tono e stile di risposta (es: 'Sei Michele Boldrin...')." },
           persona: { type: "string", description: "Profilo descrittivo, background ed attitudine dell'agente." },
-          expertise: { type: "string", description: "Elenco di competenze chiave (es: ' fundraising, unit economics')." }
+          expertise: { type: "string", description: "Elenco di competenze chiave (es: ' fundraising, unit economics')." },
+          autoTrain: { type: "boolean", description: "Se true, dopo la creazione avvia automaticamente il training con ricerca web profonda sull'expertise specificata." }
         },
         required: ["name", "type"]
       }
     }
   },
   handler: async (args, context) => {
-    const settingsPayload: any = {};
+    const settingsPayload: any = {
+      enabledTools: ["get_knowledge_pattern_details", "webSearch", "getStartupInfo", "getCustomMetrics", "readWebPage"]
+    };
     if (args.systemPrompt) settingsPayload.systemPrompt = args.systemPrompt;
     if (args.persona) settingsPayload.persona = args.persona;
     if (args.expertise) settingsPayload.expertise = args.expertise;
@@ -319,8 +352,41 @@ registry.register({
         settings: settingsPayload
       })
     });
-    const result = newAgent?.[0] || { success: true };
-    return { result, success: true, details: `Agente creato: ${args.name} con impostazioni avanzate.` };
+    
+    const agent = newAgent?.[0];
+    if (!agent) {
+      throw new Error("Impossibile creare l'agente specializzato.");
+    }
+
+    let trainingStarted = false;
+    if (args.autoTrain && args.expertise) {
+      trainingStarted = true;
+      if (context.push) {
+        context.push("debug", `🧠 [Training] Avvio addestramento automatico in background per l'agente ${args.name}...`);
+      }
+      // Eseguiamo in background senza attendere il completamento sincrono
+      runAgentTraining(agent.id, args.expertise, args.name, args.type, context.modelId || "openrouter/free", (event) => {
+        if (context.push) {
+          if (event.type === "phase") {
+            context.push("debug", `🧠 [Training - ${args.name}] Stato: ${event.message}`);
+          } else if (event.type === "testing_done") {
+            context.push("debug", `🧪 [Training - ${args.name}] Test identità: ${event.message}`);
+          } else if (event.type === "done") {
+            context.push("debug", `✅ [Training - ${args.name}] Addestramento completato con successo!`);
+          } else if (event.type === "error") {
+            context.push("debug", `❌ [Training - ${args.name}] Errore: ${event.message}`);
+          }
+        }
+      }).catch(err => {
+        console.error(`Errore addestramento agente ${agent.id}:`, err);
+      });
+    }
+
+    const details = trainingStarted
+      ? `Agente ${args.name} creato e addestramento avviato in background.`
+      : `Agente ${args.name} creato con successo.`;
+
+    return { result: agent, success: true, details };
   }
 });
 
@@ -349,6 +415,61 @@ registry.register({
     await supabaseFetch(`/AgentConfig?id=eq.${args.agentId}`, { method: "DELETE" });
     const result = { success: true, message: `Agente con ID ${args.agentId} eliminato con successo.` };
     return { result, success: true, details: `Agente ${args.agentId} eliminato.` };
+  }
+});
+
+// 7.5. trainAgent
+registry.register({
+  name: "trainAgent",
+  emoji: "🔄",
+  schema: {
+    type: "function",
+    function: {
+      name: "trainAgent",
+      description: "Avvia l'addestramento (auto-training con ricerca web profonda) di un agente specializzato esistente per aggiornare o definire le sue competenze. Richiede l'ID dell'agente e l'expertise di specializzazione.",
+      parameters: {
+        type: "object",
+        properties: {
+          agentId: { type: "string", description: "L'ID dell'agente da addestrare. Usa getActiveAgents per trovarlo." },
+          expertise: { type: "string", description: "L'expertise specifica da insegnare all'agente (es: 'esperto di crypto taxation e ERC20')." }
+        },
+        required: ["agentId", "expertise"]
+      }
+    }
+  },
+  handler: async (args, context) => {
+    if (context.push) {
+      context.push("tool_start", { name: "trainAgent", label: `Avvio addestramento agente...` });
+    }
+    const agents = await supabaseFetch(`/AgentConfig?id=eq.${args.agentId}&select=id,name,type`);
+    const agent = agents?.[0];
+    if (!agent) {
+      throw new Error(`Agente con ID ${args.agentId} non trovato.`);
+    }
+
+    if (context.push) {
+      context.push("debug", `🧠 [Training] Avvio addestramento in background per l'agente ${agent.name}...`);
+    }
+
+    // Eseguiamo in background
+    runAgentTraining(agent.id, args.expertise, agent.name, agent.type, context.modelId || "openrouter/free", (event) => {
+      if (context.push) {
+        if (event.type === "phase") {
+          context.push("debug", `🧠 [Training - ${agent.name}] Stato: ${event.message}`);
+        } else if (event.type === "testing_done") {
+          context.push("debug", `🧪 [Training - ${agent.name}] Test identità: ${event.message}`);
+        } else if (event.type === "done") {
+          context.push("debug", `✅ [Training - ${agent.name}] Addestramento completato con successo!`);
+        } else if (event.type === "error") {
+          context.push("debug", `❌ [Training - ${agent.name}] Errore: ${event.message}`);
+        }
+      }
+    }).catch(err => {
+      console.error(`Errore addestramento agente ${agent.id}:`, err);
+    });
+
+    const result = { success: true, message: `Addestramento avviato in background per l'agente "${agent.name}".` };
+    return { result, success: true, details: `Addestramento avviato per ${agent.name}` };
   }
 });
 
@@ -569,18 +690,15 @@ registry.register({
     }
     let result;
     let isTavily = false;
-    if (context.settings?.useTavily) {
-      const tavilyKey = await getApiKey("tavily");
-      if (tavilyKey) {
-        try {
-          result = await searchTavily(args.query, tavilyKey);
-          isTavily = true;
-        } catch (e: any) {
-          if (context.push) context.push("debug", `⚠️ Errore Tavily, fallback su DuckDuckGo: ${e.message}`);
-          result = await searchWeb(args.query);
-        }
-      } else {
-        if (context.push) context.push("debug", "⚠️ Tavily abilitato ma chiave non configurata, fallback su DuckDuckGo");
+    const tavilyKey = await getApiKey("tavily");
+    const useTavily = context.settings?.useTavily !== false;
+
+    if (useTavily && tavilyKey) {
+      try {
+        result = await searchTavily(args.query, tavilyKey);
+        isTavily = true;
+      } catch (e: any) {
+        if (context.push) context.push("debug", `⚠️ Errore Tavily, fallback su DuckDuckGo: ${e.message}`);
         result = await searchWeb(args.query);
       }
     } else {
@@ -950,4 +1068,317 @@ registry.register({
   }
 });
 
+// 25. trainAgent
+registry.register({
+  name: "trainAgent",
+  emoji: "🧠",
+  schema: {
+    type: "function",
+    function: {
+      name: "trainAgent",
+      description: "Addestra un agente esistente rendendolo un vero esperto di dominio. Esegue 8-12 ricerche web approfondite, legge fino a 15 pagine complete, e genera automaticamente un system prompt professionale con knowledge base, best practices, anti-pattern e direttive agentiche. Il training richiede ~2 minuti.",
+      parameters: {
+        type: "object",
+        properties: {
+          agentId: { type: "string", description: "L'ID dell'agente da addestrare (ottenibile da getActiveAgents)." },
+          expertise: { type: "string", description: "Descrizione dettagliata dell'area di competenza in cui addestrare l'agente (es: 'growth hacking per SaaS B2B, Product-Led Growth, viral loops, ottimizzazione funnel di conversione')." },
+        },
+        required: ["agentId", "expertise"]
+      }
+    }
+  },
+  handler: async (args, context) => {
+    const { agentId, expertise } = args;
+
+    // Fetch agent info
+    const agents = await supabaseFetch(`/AgentConfig?id=eq.${agentId}&select=id,name,type,settings`);
+    const agent = agents?.[0];
+    if (!agent) {
+      return { result: { error: "Agente non trovato" }, success: false, details: `Agente con ID ${agentId} non trovato.` };
+    }
+
+    if (context.push) context.push("debug", `🧠 Avvio training per "${agent.name}" — expertise: "${expertise}"`);
+
+    // Phase 1: Generate search queries
+    if (context.push) context.push("debug", "🔍 Fase 1: Generazione query di ricerca...");
+    const queryTopics = [
+      `${expertise} best practices guide`,
+      `${expertise} framework methodology`,
+      `${expertise} common mistakes anti-patterns`,
+      `${expertise} case studies examples success`,
+      `${expertise} tools resources software`,
+      `${expertise} KPIs metrics benchmarks`,
+      `${expertise} trends 2024 2025`,
+      `${expertise} expert comprehensive guide`,
+      `${expertise} startup strategy`,
+      `${expertise} advanced techniques`,
+    ];
+
+    // Phase 2: Batch search
+    if (context.push) context.push("debug", `🌐 Fase 2: Esecuzione ${queryTopics.length} ricerche web in parallelo...`);
+    let tavilyKey: string | null = null;
+    try { tavilyKey = await getApiKey("tavily"); } catch {}
+    
+    const searchResults = await batchSearch(queryTopics, tavilyKey || undefined);
+    const allUrls: { title: string; link: string }[] = [];
+    for (const group of searchResults) {
+      for (const r of group.results) {
+        if (r.link && r.link.startsWith("http")) {
+          allUrls.push({ title: r.title, link: r.link });
+        }
+      }
+    }
+    if (context.push) context.push("debug", `✅ ${allUrls.length} risultati trovati`);
+
+    // Phase 3: Read top 15 pages
+    const urlsToRead = allUrls.slice(0, 15);
+    if (context.push) context.push("debug", `📖 Fase 3: Lettura approfondita di ${urlsToRead.length} pagine...`);
+
+    const pageContents: { url: string; title: string; content: string }[] = [];
+    for (let i = 0; i < urlsToRead.length; i += 5) {
+      const batch = urlsToRead.slice(i, i + 5);
+      const results = await Promise.all(batch.map(async (r) => {
+        try {
+          const content = await readWebPageDeep(r.link, 10000);
+          if (content && !content.startsWith("Error:") && content.length > 200) {
+            return { url: r.link, title: r.title, content };
+          }
+          return null;
+        } catch { return null; }
+      }));
+      for (const r of results) {
+        if (r) pageContents.push(r);
+      }
+    }
+
+    const totalChars = pageContents.reduce((sum, p) => sum + p.content.length, 0);
+    if (context.push) context.push("debug", `✅ ${pageContents.length} pagine lette (${(totalChars / 1000).toFixed(0)}K caratteri)`);
+
+    // Phase 4: LLM Synthesis
+    if (context.push) context.push("debug", "🧠 Fase 4: Sintesi conoscenze e generazione prompt...");
+
+    let knowledgeCorpus = pageContents.map((p, i) =>
+      `═══ FONTE ${i + 1}: ${p.title} (${p.url}) ═══\n${p.content}`
+    ).join("\n\n");
+    if (knowledgeCorpus.length > 80000) {
+      knowledgeCorpus = knowledgeCorpus.substring(0, 80000) + "\n...[troncato]";
+    }
+
+    const synthResponse = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://agentfoundry.ai",
+        "X-Title": "AgentFoundry Agent Trainer",
+      },
+      body: JSON.stringify({
+        model: context.modelId || "openrouter/free",
+        messages: [
+          { role: "system", content: "Sei un architetto di prompt AI. Genera SOLO il system prompt richiesto, senza commenti aggiuntivi. Scrivi in italiano." },
+          { role: "user", content: `Crea un system prompt PROFESSIONALE per un agente AI chiamato "${agent.name}" (tipo: ${agent.type}), specializzato in: "${expertise}".\n\nConoscenze dalla ricerca web:\n${knowledgeCorpus}\n\nGenera un prompt con queste sezioni:\n1. 🧠 IDENTITÀ, RUOLO E FILOSOFIA COGNITIVA\n2. 📚 KNOWLEDGE BASE SPECIALISTICA (la più lunga — includi framework reali, tool concreti, metriche, case study)\n3. 🎯 DIRETTIVE AGENTICHE INVARIANTI (tool-use enforcement, act-don't-ask, anti-hallucination, parallel batching)\n4. ⚠️ ANTI-PATTERN E ERRORI COMUNI\n5. 📐 REGOLE DI COMUNICAZIONE (italiano, tabelle, prossimi passi)\n\nIl prompt deve essere LUNGO e RICCHISSIMO di dettagli concreti estratti dalle fonti.` },
+        ],
+        max_tokens: 4000,
+        temperature: 0.4,
+      }),
+    });
+    if (!synthResponse.ok) {
+      const errText = await synthResponse.text();
+      return { result: { error: `HTTP ${synthResponse.status}: ${errText}` }, success: false, details: `Errore chiamata LLM: ${errText}` };
+    }
+    const synthData = await synthResponse.json();
+    if (synthData.error) {
+      return { result: { error: synthData.error }, success: false, details: `Errore OpenRouter: ${JSON.stringify(synthData.error)}` };
+    }
+    const generatedPrompt = synthData.choices?.[0]?.message?.content || "";
+
+    if (!generatedPrompt || generatedPrompt.length < 200) {
+      return { result: { error: "Generazione prompt fallita o testo vuoto" }, success: false, details: "Il modello non ha prodotto un prompt valido." };
+    }
+
+    // Phase 5: Save
+    if (context.push) context.push("debug", "💾 Fase 5: Salvataggio configurazione...");
+    const currentSettings = agent.settings || {};
+    const sources = pageContents.map(p => ({ url: p.url, title: p.title }));
+    const updatedSettings = {
+      ...currentSettings,
+      systemPrompt: generatedPrompt,
+      expertise,
+      persona: `${agent.name} — ${expertise}`,
+      knowledgeSources: sources,
+      trainedAt: new Date().toISOString(),
+      trainingStats: {
+        queriesUsed: queryTopics.length,
+        pagesRead: pageContents.length,
+        totalChars,
+        promptLength: generatedPrompt.length,
+      },
+    };
+
+    await supabaseFetch(`/AgentConfig?id=eq.${agentId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ settings: updatedSettings }),
+    });
+
+    if (context.push) context.push("debug", `✅ Training completato! Prompt: ${generatedPrompt.length} caratteri, ${pageContents.length} fonti`);
+
+    return {
+      result: {
+        success: true,
+        agentName: agent.name,
+        promptLength: generatedPrompt.length,
+        sourcesCount: sources.length,
+        pagesRead: pageContents.length,
+        totalKnowledgeChars: totalChars,
+        promptPreview: generatedPrompt.substring(0, 500) + "...",
+      },
+      success: true,
+      details: `Agente "${agent.name}" addestrato con successo: ${generatedPrompt.length} caratteri di prompt, ${pageContents.length} fonti web analizzate (${(totalChars / 1000).toFixed(0)}K caratteri di conoscenze).`
+    };
+  }
+});
+
+// requestInformationForm
+registry.register({
+  name: "requestInformationForm",
+  emoji: "📋",
+  schema: {
+    type: "function",
+    function: {
+      name: "requestInformationForm",
+      description: "Crea un modulo (form) interattivo per richiedere informazioni o preferenze al founder. VALUTA AUTONOMAMENTE: usalo quando ti mancano dati o parametri critici indispensabili per l'analisi o l'esecuzione del task. Scegli le domande e i tipi di input più appropriati (text, number, boolean, select). NON usarlo se hai già abbastanza contesto o per domande semplici.",
+      parameters: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "Il titolo del modulo (es. 'Dati Finanziari Dettagliati' o 'Scelte Tecnologiche')"
+          },
+          description: {
+            type: "string",
+            description: "Spiegazione o istruzioni per l'utente sul perché sono richieste queste informazioni."
+          },
+          fields: {
+            type: "array",
+            description: "Elenco dei campi che l'utente deve compilare nel modulo.",
+            items: {
+              type: "object",
+              properties: {
+                id: {
+                  type: "string",
+                  description: "Identificativo univoco del campo (es. 'target_mrr', 'database_choice')"
+                },
+                label: {
+                  type: "string",
+                  description: "Etichetta del campo visibile all'utente (es. 'MRR Obiettivo', 'Scelta Database')"
+                },
+                type: {
+                  type: "string",
+                  enum: ["text", "number", "boolean", "select"],
+                  description: "Tipo di input."
+                },
+                placeholder: {
+                  type: "string",
+                  description: "Suggerimento / esempio di inserimento."
+                },
+                required: {
+                  type: "boolean",
+                  description: "Se il campo è obbligatorio."
+                },
+                options: {
+                  type: "array",
+                  items: { "type": "string" },
+                  "description": "Opzioni selezionabili se il tipo è 'select'."
+                }
+              },
+              required: ["id", "label", "type"]
+            }
+          }
+        },
+        required: ["title", "description", "fields"]
+      }
+    }
+  },
+  handler: async (args, context) => {
+    return {
+      success: true,
+      details: `Modulo '${args.title}' creato con successo. In attesa delle risposte dell'utente.`,
+      result: {
+        title: args.title,
+        description: args.description,
+        fields: args.fields
+      }
+    };
+  }
+});
+
+// 27. getUpcomingEvents (Google Calendar)
+registry.register({
+  name: "getUpcomingEvents",
+  emoji: "📅",
+  schema: {
+    type: "function",
+    function: {
+      name: "getUpcomingEvents",
+      description: "Recupera i prossimi eventi e riunioni programmati nel Google Calendar della startup.",
+      parameters: { type: "object", properties: { maxResults: { type: "integer", description: "Numero massimo di eventi da recuperare (default 10)." } } }
+    }
+  },
+  handler: async (args, context) => {
+    if (context.push) {
+      context.push("tool_start", { name: "getUpcomingEvents", label: "Lettura eventi Google Calendar..." });
+    }
+    const events = await getUpcomingCalendarEvents(args.maxResults || 10);
+    return {
+      success: true,
+      result: events,
+      details: `${events.length} eventi trovati in Google Calendar.`
+    };
+  }
+});
+
+// 28. createCalendarEvent (Google Calendar)
+registry.register({
+  name: "createCalendarEvent",
+  emoji: "📆",
+  schema: {
+    type: "function",
+    function: {
+      name: "createCalendarEvent",
+      description: "Pianifica e crea un nuovo evento o riunione nel Google Calendar della startup.",
+      parameters: {
+        type: "object",
+        properties: {
+          summary: { type: "string", description: "Titolo dell'evento (es: 'Incontro Investor Angel', 'Sprint Review Tech')." },
+          description: { type: "string", description: "Descrizione dettagliata dell'ordine del giorno o argomenti da trattare." },
+          startIso: { type: "string", description: "Orario d'inizio in formato ISO string (es: '2026-07-31T14:30:00Z')." },
+          durationMinutes: { type: "integer", description: "Durata dell'evento in minuti (default 30)." },
+          location: { type: "string", description: "Luogo o link del meeting (es: 'Google Meet', 'Milano HQ')." },
+          attendees: { type: "array", items: { type: "string" }, description: "Lista delle email dei partecipanti." }
+        },
+        required: ["summary", "startIso"]
+      }
+    }
+  },
+  handler: async (args, context) => {
+    if (context.push) {
+      context.push("tool_start", { name: "createCalendarEvent", label: `Creazione evento: "${args.summary}"...` });
+    }
+    const event = await createGoogleCalendarEvent({
+      summary: args.summary,
+      description: args.description,
+      startIso: args.startIso,
+      durationMinutes: args.durationMinutes,
+      location: args.location,
+      attendees: args.attendees
+    });
+    return {
+      success: true,
+      result: event,
+      details: `Evento '${event.summary}' pianificato con successo per il ${new Date(event.start).toLocaleString('it-IT')}.`
+    };
+  }
+});
+
 export { registry };
+

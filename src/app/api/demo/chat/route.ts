@@ -6,35 +6,12 @@ import * as path from "path";
 import { getApiKey } from "@/lib/secure-store";
 import { getArtifacts, saveArtifacts, Artifact } from "@/lib/custom-artifacts";
 import { executePython, executeTypeScript } from "@/lib/sandbox-runner";
+import { registry } from "@/lib/tools/handlers";
 
-const DEFAULT_MODEL = "openrouter/owl-alpha";
+const DEFAULT_MODEL = "openrouter/free";
 const METRICS_FILE_PATH = path.join(process.cwd(), "src/lib/custom-metrics.json");
 
-const SUPABASE_URL = process.env.SUPABASE_URL || "";
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
-const supabaseHeaders = {
-  "apikey": SUPABASE_SERVICE_KEY,
-  "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
-  "Content-Type": "application/json",
-  "Prefer": "return=representation",
-};
-
-async function supabaseFetch(path: string, options: any = {}) {
-  const url = `${SUPABASE_URL}/rest/v1${path}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      ...supabaseHeaders,
-      ...options.headers,
-    },
-  });
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Supabase REST error: ${response.status} - ${errorText}`);
-  }
-  return response.json();
-}
+import { supabaseFetch, SUPABASE_URL, SUPABASE_SERVICE_KEY } from "@/lib/supabase-demo";
 
 function findModel(modelId: string) {
   return AVAILABLE_MODELS.find(m => m.id === modelId);
@@ -776,6 +753,7 @@ ${matchedPatterns.map((p: any) => {
           if (enabledTools.includes("get_knowledge_pattern_details")) {
             toolDescItems.push(`- 'get_knowledge_pattern_details': ${customDescriptions.get_knowledge_pattern_details || "Approfondisce i dettagli di una specifica conoscenza o pattern."}`);
           }
+          toolDescItems.push(`- 'requestInformationForm': Crea un modulo (form) interattivo con domande mirate per raccogliere dati o preferenze mancanti.`);
 
           const toolsSection = toolDescItems.length > 0
             ? `Strumenti a tua disposizione:\n${toolDescItems.join("\n")}`
@@ -793,8 +771,18 @@ ${matchedPatterns.map((p: any) => {
           const modelInfo = findModel(selectedModel);
           const modelToUse = modelInfo ? modelInfo.id : selectedModel;
 
+          const currentDateStr = new Date().toLocaleDateString("it-IT", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric"
+          });
+          const isoDateStr = new Date().toISOString().split("T")[0];
+
           const basePrompt = (agentConfig.settings as any)?.systemPrompt || getSystemPrompt(agentType);
-          const systemPrompt = `${basePrompt}
+          const systemPrompt = `📅 DATA ODIERNA: ${currentDateStr} (ISO: ${isoDateStr})
+
+${basePrompt}
 
 Informazioni Startup (${startup.name}):
 - Settore: ${startup.sector}
@@ -808,10 +796,14 @@ ${patternIndex}${playbookContext}${crossAgentContext}${mnemosyneContext}
 
 ${toolsSection}
 ${rulesSection}
+- DATA ODIERNA CORRENTE: La data di oggi è ${currentDateStr} (${isoDateStr}). Quando rispondi al founder o effettui ricerche web, fai riferimento a questa data aggiornata.
+- USO AUTONOMO MODULI (requestInformationForm): Decidi in autonomia quando ti mancano dati o metriche essenziali per completare un'analisi o un piano. In tal caso, invoca 'requestInformationForm' definendo le domande e i tipi di campo (text, number, boolean, select) più pertinenti. NON usarlo se hai già abbastanza informazioni o per domande banali.
 - REASONING LOOP (OBBLIGATORIO): Prima di formulare qualsiasi risposta o prima di richiedere l'uso di uno strumento, devi analizzare la situazione ed elaborare il tuo ragionamento all'interno dei tag <thought>...</thought>.
 - CONTROLLO OUTPUT (CRITICO): Se stai chiamando uno strumento (tool), NON scrivere nulla al di fuori dei tag <thought>...</thought>. Solo quando hai finito di usare gli strumenti e sei pronto per la risposta finale rivolta al founder, scriverai il testo della risposta finale al di fuori dei tag <thought>...</thought>. Tutto ciò che è ragionamento intermedio o spiegazione del tool deve stare dentro i tag di pensiero per non essere mostrato direttamente al founder.
 - IDENTITÀ LLM ATTUALE: Stai girando sul modello LLM "${modelInfo?.name || modelToUse}" (ID: "${modelToUse}"). Se ti viene chiesto che modello sei o quale intelligenza artificiale stai usando, rispondi basandoti su queste informazioni.
 - Fornisci consigli pratici e specifici per la situazione attuale della startup. Sii conciso ma esaustivo.`;
+
+          console.log(`[DEBUG] basePrompt check: Agent Name: "${agentConfig.name}" | has custom systemPrompt? = ${!!(agentConfig.settings as any)?.systemPrompt} | length = ${(agentConfig.settings as any)?.systemPrompt?.length || 0}. Prompt starts with: "${basePrompt.substring(0, 100)}..."`);
 
           const apiMessages = [
             { role: "system", content: systemPrompt },
@@ -943,6 +935,11 @@ ${rulesSection}
             }
           });
 
+          const formToolEntry = registry.getEntry("requestInformationForm");
+          if (formToolEntry && formToolEntry.schema) {
+            tools.push(formToolEntry.schema);
+          }
+
           console.log("[Chat Stream] starting ReAct loop. Model:", modelToUse);
           push("debug", `🖥️ Generazione risposta in corso con il modello: ${modelInfo?.name || modelToUse}...`);
 
@@ -950,6 +947,7 @@ ${rulesSection}
           const maxLoops = 90; // Hermes Agent maximum iterations limit
           let keepRunning = true;
           let replyText = "";
+          let requestedFormPayload: any = null;
           const currentMessages = [...apiMessages];
 
           while (keepRunning && loopCount < maxLoops) {
@@ -959,10 +957,27 @@ ${rulesSection}
               push("debug", `🖥️ Esecuzione passaggi di ragionamento successivi (iterazione ${loopCount}/${maxLoops})...`);
             }
 
-            const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            let targetUrl = "https://openrouter.ai/api/v1/chat/completions";
+            let targetKey = OPENROUTER_KEY;
+            const cm = body.customModel;
+
+            if (cm?.provider === "openai") {
+              targetUrl = "https://api.openai.com/v1/chat/completions";
+              targetKey = cm.apiKey || process.env.OPENAI_API_KEY || OPENROUTER_KEY;
+            } else if (cm?.provider === "ollama") {
+              targetUrl = (cm.baseUrl || "http://localhost:11434/v1").replace(/\/$/, "") + "/chat/completions";
+              targetKey = cm.apiKey || "ollama";
+            } else if (cm?.provider === "custom" && cm?.baseUrl) {
+              targetUrl = cm.baseUrl.replace(/\/$/, "") + (cm.baseUrl.endsWith("/chat/completions") ? "" : "/chat/completions");
+              if (cm.apiKey) targetKey = cm.apiKey;
+            } else if (cm?.apiKey) {
+              targetKey = cm.apiKey;
+            }
+
+            const res = await fetch(targetUrl, {
               method: "POST",
               headers: {
-                "Authorization": "Bearer " + OPENROUTER_KEY,
+                "Authorization": "Bearer " + targetKey,
                 "Content-Type": "application/json",
                 "HTTP-Referer": "http://localhost:3000",
                 "X-Title": "AgentFoundry",
@@ -970,7 +985,7 @@ ${rulesSection}
               body: JSON.stringify({
                 model: modelToUse,
                 messages: currentMessages,
-                tools: tools,
+                tools: tools.length > 0 ? tools : undefined,
                 temperature: memorySettings.temperature ?? 0.7,
                 stream: true,
                 max_tokens: 4000,
@@ -990,9 +1005,7 @@ ${rulesSection}
             let currentAssistantText = "";
             let reasoningText = "";
             let isToolCallRequested = false;
-            let toolCallId = "";
-            let toolArguments = "";
-            let toolFunctionName = "";
+            let toolCalls: any[] = [];
             let buffer = "";
 
             let streamTextBuffer = "";
@@ -1031,10 +1044,19 @@ ${rulesSection}
                     // Tool Call Content
                     if (delta.tool_calls && delta.tool_calls.length > 0) {
                       isToolCallRequested = true;
-                      const tc = delta.tool_calls[0];
-                      if (tc.id) toolCallId = tc.id;
-                      if (tc.function?.name) toolFunctionName = tc.function.name;
-                      if (tc.function?.arguments) toolArguments += tc.function.arguments;
+                      for (const tc of delta.tool_calls) {
+                        const idx = tc.index ?? 0;
+                        if (!toolCalls[idx]) {
+                          toolCalls[idx] = {
+                            id: "",
+                            type: "function",
+                            function: { name: "", arguments: "" }
+                          };
+                        }
+                        if (tc.id) toolCalls[idx].id = tc.id;
+                        if (tc.function?.name) toolCalls[idx].function.name = tc.function.name;
+                        if (tc.function?.arguments) toolCalls[idx].function.arguments += tc.function.arguments;
+                      }
                     }
 
                     // Standard Text Content
@@ -1063,9 +1085,11 @@ ${rulesSection}
 
                       if (streamRes.toolCallFound) {
                         isToolCallRequested = true;
-                        toolCallId = "call_" + Date.now();
-                        toolFunctionName = streamRes.toolCallFound.name;
-                        toolArguments = streamRes.toolCallFound.arguments;
+                        toolCalls.push({
+                          id: "call_" + Date.now(),
+                          type: "function",
+                          function: { name: streamRes.toolCallFound.name, arguments: streamRes.toolCallFound.arguments }
+                        });
                       }
                     }
                   } catch (e) {
@@ -1084,9 +1108,11 @@ ${rulesSection}
                 const parsedTool = parseLongcat(fullText);
                 if (parsedTool) {
                   isToolCallRequested = true;
-                  toolCallId = "call_" + Date.now();
-                  toolFunctionName = parsedTool.name;
-                  toolArguments = parsedTool.arguments;
+                  toolCalls.push({
+                    id: "call_" + Date.now(),
+                    type: "function",
+                    function: { name: parsedTool.name, arguments: parsedTool.arguments }
+                  });
                 }
               } else if (isBufferingThought || streamTextBuffer.includes("<thought>")) {
                 let thoughtText = streamTextBuffer;
@@ -1106,51 +1132,52 @@ ${rulesSection}
               streamTextBuffer = "";
             }
 
+            const activeToolCalls = toolCalls.filter(tc => tc && tc.function && tc.function.name);
+
             // Se è stato richiesto un tool call, lo eseguiamo ed iteriamo
-            if (isToolCallRequested && toolArguments) {
+            if (isToolCallRequested && activeToolCalls.length > 0) {
               // Salva la richiesta dell'assistente nello storico
               currentMessages.push({
                 role: "assistant",
                 content: currentAssistantText || null,
-                tool_calls: [{
-                  id: toolCallId,
-                  type: "function",
-                  function: { name: toolFunctionName, arguments: toolArguments }
-                }]
+                tool_calls: activeToolCalls
               });
 
-              let toolContent = "";
-              let args: any = {};
-              try {
-                args = JSON.parse(toolArguments);
-              } catch (e) {
-                console.error("Failed to parse tool arguments:", toolArguments);
-              }
+              const toolPromises = activeToolCalls.map(async (tc) => {
+                const toolFunctionName = tc.function.name;
+                const toolCallId = tc.id;
+                let toolContent = "";
+                let args: any = {};
+                try {
+                  args = JSON.parse(tc.function.arguments);
+                } catch (e) {
+                  console.error("Failed to parse tool arguments:", tc.function.arguments);
+                }
 
-              push("debug", `⚙️ Esecuzione automatica tool ${toolFunctionName}...`);
+                push("debug", `⚙️ Esecuzione automatica tool ${toolFunctionName}...`);
 
-              if (toolFunctionName === "get_knowledge_pattern_details") {
-                const patternId = args.patternId;
-                let content = "Pattern non trovato o ID errato.";
-                if (patternId) {
-                  const patterns = await supabaseFetch(`/Pattern?id=eq.${patternId}&select=*`);
-                  if (patterns && patterns.length > 0) {
-                    const p = patterns[0];
-                    content = `Dettagli completi Pattern:
+                if (toolFunctionName === "get_knowledge_pattern_details") {
+                  const patternId = args.patternId;
+                  let content = "Pattern non trovato o ID errato.";
+                  if (patternId) {
+                    const patterns = await supabaseFetch(`/Pattern?id=eq.${patternId}&select=*`);
+                    if (patterns && patterns.length > 0) {
+                      const p = patterns[0];
+                      content = `Dettagli completi Pattern:
 Titolo: ${p.title}
 Descrizione/Analisi: ${p.description}
 Tasso di successo: ${(p.successRate * 100).toFixed(0)}%
 Confidenza: ${(p.confidence * 100).toFixed(0)}%
 Fattori chiave successo: ${p.keyFactors?.join(", ") || "nessuno"}
 Fattori di fallimento / errori da evitare: ${p.failureModes?.join(", ") || "nessuno"}`;
+                    }
                   }
-                }
-                toolContent = content;
-              } else if (toolFunctionName === "webSearch") {
-                let searchResults;
-                if (settings?.useTavily) {
+                  toolContent = content;
+                } else if (toolFunctionName === "webSearch") {
+                  let searchResults;
                   const tavilyKey = await getApiKey("tavily");
-                  if (tavilyKey) {
+                  const useTavily = settings?.useTavily !== false;
+                  if (useTavily && tavilyKey) {
                     try {
                       searchResults = await searchTavily(args.query || "", tavilyKey);
                       push("debug", `🔍 Ricerca web effettuata tramite Tavily per: "${args.query}"`);
@@ -1159,117 +1186,128 @@ Fattori di fallimento / errori da evitare: ${p.failureModes?.join(", ") || "ness
                       searchResults = await searchWeb(args.query || "");
                     }
                   } else {
-                    push("debug", "⚠️ Tavily abilitato ma chiave non configurata, fallback su DuckDuckGo");
+                    if (useTavily && !tavilyKey) {
+                      push("debug", "⚠️ Tavily abilitato ma chiave non trovata, usando fallback DuckDuckGo");
+                    }
                     searchResults = await searchWeb(args.query || "");
                   }
-                } else {
-                  searchResults = await searchWeb(args.query || "");
-                }
-                toolContent = JSON.stringify(searchResults);
-              } else if (toolFunctionName === "getStartupInfo") {
-                const freshStartup = await supabaseFetch(`/Startup?id=eq.${startup.id}&select=*`);
-                const finalStartup = freshStartup && freshStartup.length > 0 ? freshStartup[0] : startup;
-                toolContent = JSON.stringify(finalStartup);
-              } else if (toolFunctionName === "getCustomMetrics") {
-                const metrics = await getMetricsData();
-                toolContent = JSON.stringify(metrics);
-              } else if (toolFunctionName === "readWebPage") {
-                const textContent = await readWebPage(args.url || "");
-                toolContent = textContent;
-              } else if (toolFunctionName === "createOrUpdateArtifact") {
-                push("debug", `⚙️ Salvataggio artefatto: ${args.filename}...`);
-                const currentArtifacts = await getArtifacts();
-                const artId = args.id || "art-" + Date.now();
-                let target = currentArtifacts.find((a: any) => a.id === artId);
-                let logs: string[] = [];
-
-                if (args.type === "code") {
-                  const l = args.language.toLowerCase();
-                  if (l === "python" || l === "py") {
-                    logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione automatica script Python...`);
-                    const runOut = await executePython(args.code);
-                    logs.push(runOut);
-                  } else if (l === "javascript" || l === "typescript" || l === "js" || l === "ts") {
-                    logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione automatica script TypeScript...`);
-                    const runOut = await executeTypeScript(args.code);
-                    logs.push(runOut);
-                  }
-                }
-
-                if (target) {
-                  target.title = args.title || target.title;
-                  target.filename = args.filename || target.filename;
-                  target.code = args.code || target.code;
-                  target.language = args.language || target.language;
-                  target.type = args.type || target.type;
-                  if (logs.length > 0) target.logs = logs;
-                  target.updatedAt = new Date().toISOString();
-                  if (agentConfig?.id) {
-                    target.discussionId = agentConfig.id;
-                  }
-                } else {
-                  target = {
-                    id: artId,
-                    title: args.title,
-                    filename: args.filename,
-                    code: args.code,
-                    language: args.language,
-                    type: args.type,
-                    logs: logs,
-                    discussionId: agentConfig?.id || undefined,
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString()
-                  };
-                  currentArtifacts.push(target);
-                }
-                await saveArtifacts(currentArtifacts);
-                toolContent = JSON.stringify({ success: true, artifact: target });
-
-              } else if (toolFunctionName === "runArtifact") {
-                push("debug", `⚙️ Esecuzione artefatto...`);
-                const currentArtifacts = await getArtifacts();
-                const target = currentArtifacts.find((a: any) => a.id === args.artifactId);
-                if (!target) {
-                  toolContent = JSON.stringify({ error: `Artefatto con ID ${args.artifactId} non trovato.` });
-                } else {
+                  toolContent = JSON.stringify(searchResults);
+                } else if (toolFunctionName === "getStartupInfo") {
+                  const freshStartup = await supabaseFetch(`/Startup?id=eq.${startup.id}&select=*`);
+                  const finalStartup = freshStartup && freshStartup.length > 0 ? freshStartup[0] : startup;
+                  toolContent = JSON.stringify(finalStartup);
+                } else if (toolFunctionName === "getCustomMetrics") {
+                  const metrics = await getMetricsData();
+                  toolContent = JSON.stringify(metrics);
+                } else if (toolFunctionName === "readWebPage") {
+                  const textContent = await readWebPage(args.url || "");
+                  toolContent = textContent;
+                } else if (toolFunctionName === "createOrUpdateArtifact") {
+                  push("debug", `⚙️ Salvataggio artefatto: ${args.filename}...`);
+                  const currentArtifacts = await getArtifacts();
+                  const artId = args.id || "art-" + Date.now();
+                  let target = currentArtifacts.find((a: any) => a.id === artId);
                   let logs: string[] = [];
-                  const timestamp = new Date().toLocaleTimeString();
-                  logs.push(`> [${timestamp}] Esecuzione manuale di ${target.filename}...`);
-                  const l = target.language.toLowerCase();
-                  if (l === "python" || l === "py") {
-                    const runOut = await executePython(target.code);
-                    logs.push(runOut);
-                  } else if (l === "javascript" || l === "typescript" || l === "js" || l === "ts") {
-                    const runOut = await executeTypeScript(target.code);
-                    logs.push(runOut);
-                  } else {
-                    logs.push(`[System] Esecuzione non supportata per il linguaggio ${target.language}`);
+
+                  if (args.type === "code") {
+                    const l = args.language.toLowerCase();
+                    if (l === "python" || l === "py") {
+                      logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione automatica script Python...`);
+                      const runOut = await executePython(args.code);
+                      logs.push(runOut);
+                    } else if (l === "javascript" || l === "typescript" || l === "js" || l === "ts") {
+                      logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione automatica script TypeScript...`);
+                      const runOut = await executeTypeScript(args.code);
+                      logs.push(runOut);
+                    }
                   }
-                  logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione terminata.`);
-                  target.logs = logs;
-                  target.updatedAt = new Date().toISOString();
+
+                  if (target) {
+                    target.title = args.title || target.title;
+                    target.filename = args.filename || target.filename;
+                    target.code = args.code || target.code;
+                    target.language = args.language || target.language;
+                    target.type = args.type || target.type;
+                    if (logs.length > 0) target.logs = logs;
+                    target.updatedAt = new Date().toISOString();
+                    if (agentConfig?.id) {
+                      target.discussionId = agentConfig.id;
+                    }
+                  } else {
+                    target = {
+                      id: artId,
+                      title: args.title,
+                      filename: args.filename,
+                      code: args.code,
+                      language: args.language,
+                      type: args.type,
+                      logs: logs,
+                      discussionId: agentConfig?.id || undefined,
+                      createdAt: new Date().toISOString(),
+                      updatedAt: new Date().toISOString()
+                    };
+                    currentArtifacts.push(target);
+                  }
                   await saveArtifacts(currentArtifacts);
-                  toolContent = JSON.stringify({ success: true, logs, artifact: target });
+                  toolContent = JSON.stringify({ success: true, artifact: target });
+
+                } else if (toolFunctionName === "runArtifact") {
+                  push("debug", `⚙️ Esecuzione artefatto...`);
+                  const currentArtifacts = await getArtifacts();
+                  const target = currentArtifacts.find((a: any) => a.id === args.artifactId);
+                  if (!target) {
+                    toolContent = JSON.stringify({ error: `Artefatto con ID ${args.artifactId} non trovato.` });
+                  } else {
+                    let logs: string[] = [];
+                    const timestamp = new Date().toLocaleTimeString();
+                    logs.push(`> [${timestamp}] Esecuzione manuale di ${target.filename}...`);
+                    const l = target.language.toLowerCase();
+                    if (l === "python" || l === "py") {
+                      const runOut = await executePython(target.code);
+                      logs.push(runOut);
+                    } else if (l === "javascript" || l === "typescript" || l === "js" || l === "ts") {
+                      const runOut = await executeTypeScript(target.code);
+                      logs.push(runOut);
+                    } else {
+                      logs.push(`[System] Esecuzione non supportata per il linguaggio ${target.language}`);
+                    }
+                    logs.push(`> [${new Date().toLocaleTimeString()}] Esecuzione terminata.`);
+                    target.logs = logs;
+                    target.updatedAt = new Date().toISOString();
+                    await saveArtifacts(currentArtifacts);
+                    toolContent = JSON.stringify({ success: true, logs, artifact: target });
+                  }
+
+                } else if (toolFunctionName === "getActiveArtifacts") {
+                  push("debug", `⚙️ Recupero lista artefatti workspace...`);
+                  let list = await getArtifacts();
+                  if (agentConfig?.id) {
+                    list = list.filter(a => a.discussionId === agentConfig.id);
+                  }
+                  toolContent = JSON.stringify(list);
+                } else if (toolFunctionName === "requestInformationForm") {
+                  push("debug", `⚙️ Creazione modulo richiesta informazioni...`);
+                  push("request_form", args);
+                  requestedFormPayload = args;
+                  toolContent = JSON.stringify({
+                    success: true,
+                    details: `Modulo '${args.title}' creato con successo. In attesa delle risposte dell'utente.`,
+                    result: args
+                  });
+                } else {
+                  toolContent = `Unknown function: ${toolFunctionName}`;
                 }
 
-              } else if (toolFunctionName === "getActiveArtifacts") {
-                push("debug", `⚙️ Recupero lista artefatti workspace...`);
-                let list = await getArtifacts();
-                if (agentConfig?.id) {
-                  list = list.filter(a => a.discussionId === agentConfig.id);
-                }
-                toolContent = JSON.stringify(list);
-              } else {
-                toolContent = `Unknown function: ${toolFunctionName}`;
-              }
-
-              // Salva l'output del tool nello storico dei messaggi ed esegui la prossima iterazione
-              currentMessages.push({
-                role: "tool",
-                tool_call_id: toolCallId,
-                name: toolFunctionName,
-                content: toolContent
+                return {
+                  role: "tool",
+                  tool_call_id: toolCallId,
+                  name: toolFunctionName,
+                  content: toolContent
+                };
               });
+
+              const toolResponses = await Promise.all(toolPromises);
+              currentMessages.push(...toolResponses);
             } else {
               // Nessun tool richiesto, risposta finale ricevuta, terminiamo il loop
               keepRunning = false;
@@ -1318,7 +1356,7 @@ Fattori di fallimento / errori da evitare: ${p.failureModes?.join(", ") || "ness
               });
           }
 
-          push("done", { sessionId: agentConfig.id, model: modelToUse });
+          push("done", { sessionId: agentConfig.id, model: modelToUse, content: replyText, requestedForm: requestedFormPayload });
           controller.close();
         } catch (err: any) {
           console.error("Stream execution error:", err.message);
@@ -1344,12 +1382,13 @@ Fattori di fallimento / errori da evitare: ${p.failureModes?.join(", ") || "ness
 
 function getSystemPrompt(agentType: string): string {
   const prompts: Record<string, string> = {
-    strategy: "Sei un esperto di strategia startup. Analizza mercati, competitor e opportunità. Suggerisci strategie di crescita basate su dati. Rispondi in italiano, in modo actionable e specifico.",
-    tech: "Sei un CTO AI esperto. Aiuti con architetture software, scelta di tech stack, code review e best practices. Conosci Next.js, Python, PostgreSQL, Vercel, Docker. Rispondi in italiano con esempi di codice quando utile.",
-    finance: "Sei un esperto di finanza startup. Gestisci cash flow, proiezioni finanziarie, fundraising e metriche SaaS (MRR, ARR, CAC, LTV, burn rate). Rispondi in italiano con numeri e tabelle quando possibile.",
-    marketing: "Sei un esperto di growth marketing. Crei strategie di acquisizione, campagne e contenuti. Conosci SEO, paid ads, content marketing, PLG. Rispondi in italiano con esempi concreti.",
-    legal: "Sei un esperto legale per startup. Gestisci incorporazione, contratti, IP e compliance (GDPR). Rispondi in italiano in modo chiaro, specificando quando è necessario un avvocato.",
-    operations: "Sei un esperto di operazioni startup. Ottimizzi workflow, automatizzi processi e gestisci team. Conosci tool come Notion, Linear, Slack, Zapier. Rispondi in italiano con checklist e template.",
+    strategy: "You are a startup strategy expert. Analyze markets, competitors, and growth opportunities. Provide actionable data-driven advice. Respond in English (or the user's preferred language) concisely and specifically.",
+    tech: "You are an expert AI CTO. Help with software architecture, tech stack selection, code reviews, and engineering best practices (Next.js, Python, PostgreSQL, Vercel, Docker). Respond in English with code snippets when helpful.",
+    finance: "You are a startup finance expert. Help manage cash flow, financial projections, fundraising, and SaaS metrics (MRR, ARR, CAC, LTV, burn rate, runway). Respond in English using clear data and tables.",
+    marketing: "You are a growth marketing expert. Design acquisition strategies, campaign concepts, and content funnels (SEO, paid ads, PLG). Respond in English with concrete examples.",
+    legal: "You are a startup legal & compliance expert. Help with incorporation, contracts, IP, and compliance (GDPR/privacy). Respond clearly in English, noting when a licensed attorney is required.",
+    operations: "You are a startup operations expert. Optimize workflows, process automation, and team productivity (Notion, Linear, Slack, Zapier). Respond in English with actionable checklists.",
   };
-  return prompts[agentType] || "Sei un assistente AI per startup. Rispondi in italiano in modo utile e specifico.";
+  return prompts[agentType] || "You are a specialized AI startup assistant. Respond in English with actionable and specific insights.";
 }
+

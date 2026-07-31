@@ -19,6 +19,7 @@ export interface ToolContext {
   push?: (type: string, content: any) => void;
   settings?: any;
   delegations?: any[];
+  modelId?: string;
   setAgentSuggestion?: (suggestion: any) => void;
 }
 

@@ -183,6 +183,30 @@ ARRAY['pat_001', 'pat_006', 'pat_007'], 0.68),
 ARRAY['pat_002', 'pat_006'], 0.72)
 ON CONFLICT DO NOTHING;
 
+-- ─────────────────────────────────────────────────────────────
+-- SECURE KEY STORE
+-- Chiavi API cifrate lato server (AES-256-GCM).
+-- La plaintext key non viene mai salvata — solo il ciphertext.
+-- Accessibile SOLO tramite service role key (bypassa RLS).
+-- ─────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS "SecureKey" (
+    "id"            TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "name"          TEXT NOT NULL,          -- es. 'tavily', 'openai'
+    "iv"            TEXT NOT NULL,          -- AES-256-GCM IV (hex, 96-bit)
+    "encryptedData" TEXT NOT NULL,          -- ciphertext (hex)
+    "authTag"       TEXT NOT NULL,          -- GCM auth tag (hex, 128-bit)
+    "createdAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt"     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT "SecureKey_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "SecureKey_name_key" UNIQUE ("name")
+);
+
+-- RLS: blocca accesso pubblico — solo service role può leggere/scrivere
+ALTER TABLE "SecureKey" ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "No public access to SecureKey"
+    ON "SecureKey" FOR ALL TO public USING (false);
+
 -- VERIFY
 SELECT 'Database setup complete!' as status;
 SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name;
