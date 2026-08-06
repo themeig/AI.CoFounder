@@ -327,6 +327,24 @@ const DEFAULT_AGENTS_FALLBACK = [
   { id: "demo-agent-operations", startupId: "demo-startup-id", type: "operations", name: "Operations Agent", isActive: true, settings: { mnemosyne: [] } },
 ];
 
+export let fallbackStartup = {
+  id: "demo-startup-id",
+  userId: "demo-user-id",
+  name: "TechFlow",
+  description: "AI-powered workflow automation for startups",
+  sector: "saas",
+  phase: "pre-seed",
+  mrr: 8500,
+  users: 27000,
+  burnRate: 18000,
+  runway: 14,
+};
+
+export function updateFallbackStartup(updates: Partial<typeof fallbackStartup>) {
+  fallbackStartup = { ...fallbackStartup, ...updates };
+  return fallbackStartup;
+}
+
 function getFallbackData(path: string, options: any = {}) {
   const method = (options.method || "GET").toUpperCase();
 
@@ -335,18 +353,13 @@ function getFallbackData(path: string, options: any = {}) {
   }
 
   if (path.includes("/Startup")) {
-    return [{
-      id: "demo-startup-id",
-      userId: "demo-user-id",
-      name: "TechFlow",
-      description: "AI-powered workflow automation for startups",
-      sector: "saas",
-      phase: "pre-seed",
-      mrr: 1200,
-      users: 150,
-      burnRate: 800,
-      runway: 18,
-    }];
+    if (method === "PATCH" || method === "PUT" || method === "POST") {
+      try {
+        const body = typeof options.body === "string" ? JSON.parse(options.body) : options.body;
+        return [updateFallbackStartup(body)];
+      } catch {}
+    }
+    return [fallbackStartup];
   }
 
   if (path.includes("/AgentConfig")) {

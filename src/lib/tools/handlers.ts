@@ -7,6 +7,7 @@ import { executePython, executeTypeScript } from "@/lib/sandbox-runner";
 import { searchWeb, searchTavily, readWebPage, batchSearch, readWebPageDeep } from "./web-utils";
 import { runAgentTraining } from "../agents/trainer";
 import { getUpcomingCalendarEvents, createGoogleCalendarEvent, updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from "@/lib/connectors/gcal";
+import { updateFallbackStartup } from "@/lib/supabase-demo";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -1528,6 +1529,8 @@ registry.register({
     if (args.phase !== undefined) updatePayload.phase = String(args.phase);
     if (args.sector !== undefined) updatePayload.sector = String(args.sector);
 
+    updateFallbackStartup(updatePayload);
+
     const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/Startup?id=eq.${startupId}`, {
       method: "PATCH",
       headers,
@@ -1537,7 +1540,7 @@ registry.register({
 
     return {
       success: true,
-      result: updated && updated.length > 0 ? updated[0] : updatePayload,
+      result: updated && Array.isArray(updated) && updated.length > 0 ? updated[0] : updatePayload,
       details: `Metriche startup aggiornate nel database: ${JSON.stringify(updatePayload)}`
     };
   }

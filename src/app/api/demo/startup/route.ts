@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
-import { supabaseFetch } from "@/lib/supabase-demo";
+import { supabaseFetch, updateFallbackStartup } from "@/lib/supabase-demo";
+
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET() {
   try {
@@ -9,19 +12,9 @@ export async function GET() {
     const startups = await supabaseFetch(`/Startup?userId=eq.${userId}&select=*`);
     const startup = startups && Array.isArray(startups) && startups.length > 0
       ? startups[0]
-      : {
-          id: "demo-startup-id",
-          name: "TechFlow",
-          description: "AI-powered workflow automation for startups",
-          sector: "saas",
-          phase: "pre-seed",
-          mrr: 8500,
-          users: 27000,
-          burnRate: 18000,
-          runway: 14,
-        };
+      : updateFallbackStartup({});
 
-    const startupId = startup.id;
+    const startupId = startup.id || "demo-startup-id";
     const agents = await supabaseFetch(`/AgentConfig?startupId=eq.${startupId}&select=id,type,name,isActive,settings`);
 
     const agentsWithStats = [];
@@ -45,6 +38,9 @@ export async function GET() {
       }
     }
 
+    // Sync fallback startup in memory
+    updateFallbackStartup(startup);
+
     const result = [{
       ...startup,
       agents: agentsWithStats,
@@ -54,15 +50,7 @@ export async function GET() {
   } catch (err: any) {
     console.error("Demo startup GET fallback error:", err?.message || err);
     return NextResponse.json([{
-      id: "demo-startup-id",
-      name: "TechFlow",
-      description: "AI-powered workflow automation for startups",
-      sector: "saas",
-      phase: "pre-seed",
-      mrr: 8500,
-      users: 27000,
-      burnRate: 18000,
-      runway: 14,
+      ...updateFallbackStartup({}),
       agents: [],
     }]);
   }
@@ -73,21 +61,7 @@ export async function PUT(req: Request) {
     const body = await req.json();
     const { mrr, users, burnRate, runway, phase, sector, name, description } = body;
 
-    const usersList = await supabaseFetch("/User?email=eq.demo@agentfoundry.ai&select=id");
-    const userId = usersList && Array.isArray(usersList) && usersList.length > 0 ? usersList[0].id : null;
-
-    if (!userId) {
-      return NextResponse.json({ error: "Utente non trovato." }, { status: 404 });
-    }
-
-    const startups = await supabaseFetch(`/Startup?userId=eq.${userId}&select=*`);
-    if (!startups || startups.length === 0) {
-      return NextResponse.json({ error: "Startup non trovata." }, { status: 404 });
-    }
-
-    const startupId = startups[0].id;
     const updatePayload: any = {};
-
     if (mrr !== undefined) updatePayload.mrr = Number(mrr);
     if (users !== undefined) updatePayload.users = Number(users);
     if (burnRate !== undefined) updatePayload.burnRate = Number(burnRate);
@@ -97,15 +71,29 @@ export async function PUT(req: Request) {
     if (name !== undefined) updatePayload.name = String(name);
     if (description !== undefined) updatePayload.description = String(description);
 
-    const updated = await supabaseFetch(`/Startup?id=eq.${startupId}`, {
-      method: "PATCH",
-      body: JSON.stringify(updatePayload),
-    });
+    // Update in-memory fallback
+    updateFallbackStartup(updatePayload);
+
+    // Update in Supabase
+    const usersList = await supabaseFetch("/User?email=eq.demo@agentfoundry.ai&select=id");
+    const userId = usersList && Array.isArray(usersList) && usersList.length > 0 ? usersList[0].id : null;
+
+    let updated = null;
+    if (userId) {
+      const startups = await supabaseFetch(`/Startup?userId=eq.${userId}&select=*`);
+      if (startups && startups.length > 0) {
+        const startupId = startups[0].id;
+        updated = await supabaseFetch(`/Startup?id=eq.${startupId}`, {
+          method: "PATCH",
+          body: JSON.stringify(updatePayload),
+        });
+      }
+    }
 
     return NextResponse.json({
       success: true,
       message: "✓ Metriche startup aggiornate con successo nel database!",
-      startup: updated && updated.length > 0 ? updated[0] : updatePayload
+      startup: updated && Array.isArray(updated) && updated.length > 0 ? updated[0] : updatePayload
     });
   } catch (err: any) {
     console.error("[Startup PUT Error]:", err?.message || err);
