@@ -219,7 +219,7 @@ export default function DashboardHome() {
     }
   };
 
-  useEffect(() => {
+  const loadStartupData = () => {
     fetch("/api/demo/startup")
       .then((res) => res.json())
       .then((data) => {
@@ -227,9 +227,21 @@ export default function DashboardHome() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
+  };
 
+  useEffect(() => {
+    loadStartupData();
     fetchPulses();
     fetchBriefing();
+
+    const handleMetricsUpdated = () => loadStartupData();
+    window.addEventListener("startup-metrics-updated", handleMetricsUpdated);
+    window.addEventListener("heartbeat-updated", handleMetricsUpdated);
+
+    return () => {
+      window.removeEventListener("startup-metrics-updated", handleMetricsUpdated);
+      window.removeEventListener("heartbeat-updated", handleMetricsUpdated);
+    };
   }, []);
 
   if (loading) {

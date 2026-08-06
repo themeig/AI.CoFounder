@@ -15,10 +15,10 @@ export async function GET() {
           description: "AI-powered workflow automation for startups",
           sector: "saas",
           phase: "pre-seed",
-          mrr: 1200,
-          users: 150,
-          burnRate: 800,
-          runway: 18,
+          mrr: 8500,
+          users: 27000,
+          burnRate: 18000,
+          runway: 14,
         };
 
     const startupId = startup.id;
@@ -59,10 +59,10 @@ export async function GET() {
       description: "AI-powered workflow automation for startups",
       sector: "saas",
       phase: "pre-seed",
-      mrr: 1200,
-      users: 150,
-      burnRate: 800,
-      runway: 18,
+      mrr: 8500,
+      users: 27000,
+      burnRate: 18000,
+      runway: 14,
       agents: [],
     }]);
   }
