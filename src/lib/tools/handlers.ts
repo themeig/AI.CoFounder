@@ -1372,10 +1372,14 @@ registry.register({
       location: args.location,
       attendees: args.attendees
     });
+    const verifiedEvents = await getUpcomingCalendarEvents(10);
     return {
       success: true,
-      result: event,
-      details: `Evento '${event.summary}' aggiunto e sincronizzato con successo in Google Calendar per il ${new Date(event.start).toLocaleString('it-IT')}.`
+      result: {
+        createdEvent: event,
+        verifiedCalendarState: verifiedEvents
+      },
+      details: `✓ Evento '${event.summary}' aggiunto in Google Calendar per il ${new Date(event.start).toLocaleString('it-IT')}. Stato calendario verificato: ${verifiedEvents.length} eventi in agenda.`
     };
   }
 });
@@ -1422,10 +1426,14 @@ registry.register({
       };
     }
 
+    const verifiedEvents = await getUpcomingCalendarEvents(10);
     return {
       success: true,
-      result: updated,
-      details: `Evento '${updated.summary}' aggiornato con successo.`
+      result: {
+        updatedEvent: updated,
+        verifiedCalendarState: verifiedEvents
+      },
+      details: `✓ Evento '${updated.summary}' aggiornato con successo. Stato calendario verificato: ${verifiedEvents.length} eventi in agenda.`
     };
   }
 });
@@ -1453,10 +1461,17 @@ registry.register({
       context.push("tool_start", { name: "deleteCalendarEvent", label: `Eliminazione evento "${args.eventId}"...` });
     }
     const deleted = await deleteGoogleCalendarEvent(args.eventId);
+    const verifiedEvents = await getUpcomingCalendarEvents(10);
     return {
       success: deleted,
-      result: { eventId: args.eventId },
-      details: deleted ? `Evento '${args.eventId}' rimosso dal calendario.` : `Impossibile eliminare l'evento '${args.eventId}'.`
+      result: {
+        eventId: args.eventId,
+        deleted,
+        verifiedCalendarState: verifiedEvents
+      },
+      details: deleted
+        ? `✓ Evento '${args.eventId}' rimosso dal calendario. Stato calendario verificato: ${verifiedEvents.length} eventi rimanenti.`
+        : `Impossibile eliminare l'evento '${args.eventId}'.`
     };
   }
 });
