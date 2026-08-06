@@ -1096,14 +1096,33 @@ export default function SettingsPage() {
               <span className="w-5 h-5 rounded-full bg-[#1A73E8] text-white text-[10px] font-bold flex items-center justify-center">1</span>
               <span className="text-xs font-bold" style={{ color: '#202124' }}>Come collegare il tuo account Google reale</span>
             </div>
-            <div className="px-4 py-3 space-y-2 text-[11px]" style={{ color: '#5F6368' }}>
-              <p>
-                <strong>Metodo 1 (Consigliato - Immediato):</strong> Copia il tuo <strong>Indirizzo privato in formato iCal</strong> da Google Calendar.
-                <br />
-                <em>Dove trovarlo: Apri <a href="https://calendar.google.com" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google Calendar ↗</a> → Impostazioni calendario → Integrale calendario → Copia <strong>"Indirizzo privato in formato iCal"</strong> (es: <code>https://calendar.google.com/calendar/ical/.../basic.ics</code>).</em>
-              </p>
-              <p className="pt-1">
-                <strong>Metodo 2 (Avanzato):</strong> Inserisci il tuo <strong>OAuth 2.0 Access Token</strong> (<code>ya29...</code>) o Service Account Key da <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google Cloud Console ↗</a>.
+            <div className="px-4 py-3 space-y-3 text-[11px]" style={{ color: '#5F6368' }}>
+              {/* Italian Version */}
+              <div className="p-3 rounded-lg bg-[#F8F9FA] border border-[#E8EAED]">
+                <p className="font-bold text-[#202124] mb-1">🇮🇹 Istruzioni in Italiano:</p>
+                <p>
+                  <strong>Metodo 1 (Consigliato - Immediato):</strong> Copia il tuo <strong>Indirizzo segreto in formato iCal</strong> da Google Calendar.
+                  <br />
+                  <span className="text-[10.5px]">
+                    <em>Apri <a href="https://calendar.google.com" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google Calendar ↗</a> → Impostazioni (⚙️) → Seleziona il tuo calendario a sinistra → Scorri fino a "Integrale calendario" → Copia <strong>"Indirizzo segreto in formato iCal"</strong> (es: <code>https://calendar.google.com/calendar/ical/.../private-XXXXXXXX/basic.ics</code>).</em>
+                  </span>
+                </p>
+              </div>
+
+              {/* English Version */}
+              <div className="p-3 rounded-lg bg-[#F8F9FA] border border-[#E8EAED]">
+                <p className="font-bold text-[#202124] mb-1">🇬🇧 English Instructions:</p>
+                <p>
+                  <strong>Method 1 (Recommended - Instant):</strong> Copy your <strong>Secret address in iCal format</strong> from Google Calendar.
+                  <br />
+                  <span className="text-[10.5px]">
+                    <em>Open <a href="https://calendar.google.com" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google Calendar ↗</a> → Settings (⚙️) → Select your calendar on the left → Scroll to "Integrate calendar" → Copy <strong>"Secret address in iCal format"</strong> (e.g.: <code>https://calendar.google.com/calendar/ical/.../private-XXXXXXXX/basic.ics</code>).</em>
+                  </span>
+                </p>
+              </div>
+
+              <p className="pt-1 text-[10.5px]">
+                <strong>Metodo 2 / Method 2 (Avanzato / Advanced):</strong> Inserisci il tuo <strong>OAuth 2.0 Access Token</strong> (<code>ya29...</code>) o Service Account Key da <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google Cloud Console ↗</a>.
               </p>
             </div>
           </div>
