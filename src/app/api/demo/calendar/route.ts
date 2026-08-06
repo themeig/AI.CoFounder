@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { getUpcomingCalendarEvents, createGoogleCalendarEvent, isGoogleCalendarConfigured } from "@/lib/connectors/gcal";
+import {
+  getUpcomingCalendarEvents,
+  createGoogleCalendarEvent,
+  updateGoogleCalendarEvent,
+  deleteGoogleCalendarEvent,
+  isGoogleCalendarConfigured
+} from "@/lib/connectors/gcal";
 import { hasApiKey } from "@/lib/secure-store";
 
 /**
@@ -37,7 +43,6 @@ export async function POST(req: Request) {
     const body = await req.json();
 
     if (body.type === "sync_standup") {
-      // Sync today's daily standup meeting action items to Google Calendar
       const event = await createGoogleCalendarEvent({
         summary: `🎙️ Daily Standup AI.CoFounder — ${new Date().toLocaleDateString("it-IT")}`,
         description: `Riunione di allineamento team AI.\n\nAction Items per il Founder:\n${(body.actionItems || []).map((a: string, i: number) => `${i + 1}. ${a}`).join("\n")}`,
@@ -54,7 +59,6 @@ export async function POST(req: Request) {
       });
     }
 
-    // Standard event creation
     const { summary, description, startIso, durationMinutes, location, attendees } = body;
     if (!summary || !startIso) {
       return NextResponse.json({ error: "Titolo (summary) e orario d'inizio (startIso) sono obbligatori." }, { status: 400 });
@@ -76,6 +80,66 @@ export async function POST(req: Request) {
     });
   } catch (err: any) {
     console.error("[Calendar POST] Error:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+/**
+ * PUT /api/demo/calendar
+ * Modifies an existing event in Google Calendar.
+ */
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { eventId, summary, description, startIso, durationMinutes, location } = body;
+
+    if (!eventId) {
+      return NextResponse.json({ error: "L'ID o il titolo dell'evento (eventId) è obbligatorio." }, { status: 400 });
+    }
+
+    const updated = await updateGoogleCalendarEvent(eventId, {
+      summary,
+      description,
+      startIso,
+      durationMinutes,
+      location
+    });
+
+    if (!updated) {
+      return NextResponse.json({ error: `Impossibile trovare l'evento '${eventId}'.` }, { status: 404 });
+    }
+
+    return NextResponse.json({
+      success: true,
+      message: "✓ Evento modificato con successo su Google Calendar!",
+      event: updated
+    });
+  } catch (err: any) {
+    console.error("[Calendar PUT] Error:", err.message);
+    return NextResponse.json({ error: err.message }, { status: 500 });
+  }
+}
+
+/**
+ * DELETE /api/demo/calendar
+ * Deletes an event from Google Calendar.
+ */
+export async function DELETE(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const eventId = url.searchParams.get("eventId");
+
+    if (!eventId) {
+      return NextResponse.json({ error: "Parametro eventId obbligatorio." }, { status: 400 });
+    }
+
+    const deleted = await deleteGoogleCalendarEvent(eventId);
+    return NextResponse.json({
+      success: deleted,
+      message: deleted ? `✓ Evento '${eventId}' eliminato da Google Calendar!` : `Impossibile eliminare l'evento '${eventId}'.`
+    });
+  } catch (err: any) {
+    console.error("[Calendar DELETE] Error:", err.message);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }

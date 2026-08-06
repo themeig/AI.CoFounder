@@ -6,7 +6,7 @@ import { getArtifacts, saveArtifacts } from "@/lib/custom-artifacts";
 import { executePython, executeTypeScript } from "@/lib/sandbox-runner";
 import { searchWeb, searchTavily, readWebPage, batchSearch, readWebPageDeep } from "./web-utils";
 import { runAgentTraining } from "../agents/trainer";
-import { getUpcomingCalendarEvents, createGoogleCalendarEvent } from "@/lib/connectors/gcal";
+import { getUpcomingCalendarEvents, createGoogleCalendarEvent, updateGoogleCalendarEvent, deleteGoogleCalendarEvent } from "@/lib/connectors/gcal";
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || "";
 const SUPABASE_URL = process.env.SUPABASE_URL || "";
@@ -1376,6 +1376,87 @@ registry.register({
       success: true,
       result: event,
       details: `Evento '${event.summary}' pianificato con successo per il ${new Date(event.start).toLocaleString('it-IT')}.`
+    };
+  }
+});
+
+// 29. updateCalendarEvent (Google Calendar)
+registry.register({
+  name: "updateCalendarEvent",
+  emoji: "✏️",
+  schema: {
+    type: "function",
+    function: {
+      name: "updateCalendarEvent",
+      description: "Modifica o sposta un evento esistente nel Google Calendar (es. cambia orario, luogo o titolo).",
+      parameters: {
+        type: "object",
+        properties: {
+          eventId: { type: "string", description: "L'ID o il titolo dell'evento da modificare." },
+          summary: { type: "string", description: "Nuovo titolo dell'evento (opzionale)." },
+          description: { type: "string", description: "Nuova descrizione dell'evento (opzionale)." },
+          startIso: { type: "string", description: "Nuovo orario d'inizio in formato ISO string (es: '2026-08-10T15:00:00Z')." },
+          durationMinutes: { type: "integer", description: "Nuova durata dell'evento in minuti." },
+          location: { type: "string", description: "Nuovo luogo o link del meeting." }
+        },
+        required: ["eventId"]
+      }
+    }
+  },
+  handler: async (args, context) => {
+    if (context.push) {
+      context.push("tool_start", { name: "updateCalendarEvent", label: `Modifica evento "${args.eventId}"...` });
+    }
+    const updated = await updateGoogleCalendarEvent(args.eventId, {
+      summary: args.summary,
+      description: args.description,
+      startIso: args.startIso,
+      durationMinutes: args.durationMinutes,
+      location: args.location
+    });
+
+    if (!updated) {
+      return {
+        success: false,
+        error: `Impossibile trovare l'evento '${args.eventId}' da modificare.`
+      };
+    }
+
+    return {
+      success: true,
+      result: updated,
+      details: `Evento '${updated.summary}' aggiornato con successo.`
+    };
+  }
+});
+
+// 30. deleteCalendarEvent (Google Calendar)
+registry.register({
+  name: "deleteCalendarEvent",
+  emoji: "🗑️",
+  schema: {
+    type: "function",
+    function: {
+      name: "deleteCalendarEvent",
+      description: "Elimina o cancella un evento programmato dal Google Calendar.",
+      parameters: {
+        type: "object",
+        properties: {
+          eventId: { type: "string", description: "L'ID o il titolo dell'evento da eliminare." }
+        },
+        required: ["eventId"]
+      }
+    }
+  },
+  handler: async (args, context) => {
+    if (context.push) {
+      context.push("tool_start", { name: "deleteCalendarEvent", label: `Eliminazione evento "${args.eventId}"...` });
+    }
+    const deleted = await deleteGoogleCalendarEvent(args.eventId);
+    return {
+      success: deleted,
+      result: { eventId: args.eventId },
+      details: deleted ? `Evento '${args.eventId}' rimosso dal calendario.` : `Impossibile eliminare l'evento '${args.eventId}'.`
     };
   }
 });

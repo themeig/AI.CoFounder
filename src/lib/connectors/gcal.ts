@@ -46,7 +46,8 @@ const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
     end: new Date(Date.now() + 1000 * 60 * 60 * 2.5).toISOString(),
     location: "Google Meet",
     attendees: ["founder@startup.com", "cofounder@agentfoundry.ai"],
-    status: "confirmed"
+    status: "confirmed",
+    isStartup: true
   },
   {
     id: "evt-gcal-2",
@@ -56,7 +57,8 @@ const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
     end: new Date(Date.now() + 1000 * 60 * 60 * 27).toISOString(),
     location: "Google Meet / Remote",
     attendees: ["founder@startup.com", "angel1@venture.vc"],
-    status: "confirmed"
+    status: "confirmed",
+    isStartup: true
   },
   {
     id: "evt-gcal-3",
@@ -66,13 +68,11 @@ const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
     end: new Date(Date.now() + 1000 * 60 * 60 * 49).toISOString(),
     location: "AI.CoFounder Workspace",
     attendees: ["founder@startup.com", "marketing-agent@agentfoundry.ai"],
-    status: "confirmed"
+    status: "confirmed",
+    isStartup: true
   }
 ];
 
-/**
- * Helper to parse iCal / ICS format feed from Google Calendar
- */
 function parseICSDate(icsDateStr: string): Date | null {
   try {
     const clean = icsDateStr.replace(/[^0-9T]/g, "");
@@ -159,7 +159,11 @@ export async function getUpcomingCalendarEvents(maxResults = 10): Promise<Calend
         const icsText = await resIcs.text();
         const parsedEvents = parseICSEvents(icsText, maxResults);
         if (parsedEvents.length > 0) {
-          return parsedEvents;
+          // Merge with any newly created local events
+          const createdMockEvents = DEFAULT_MOCK_EVENTS.filter(e => e.id.startsWith("evt-gcal-"));
+          const combined = [...createdMockEvents, ...parsedEvents];
+          combined.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+          return combined.slice(0, maxResults);
         }
       }
     } catch (err: any) {
@@ -231,7 +235,8 @@ export async function createGoogleCalendarEvent(eventData: {
     end: endDate.toISOString(),
     location: eventData.location || "Google Meet",
     attendees: eventData.attendees || ["founder@startup.com"],
-    status: "confirmed"
+    status: "confirmed",
+    isStartup: isStartupEvent(eventData.summary, eventData.description || "")
   };
 
   if (!gcalKey || gcalKey.startsWith("http")) {
@@ -269,7 +274,8 @@ export async function createGoogleCalendarEvent(eventData: {
         end: data.end?.dateTime || endDate.toISOString(),
         location: data.location || "Google Meet",
         htmlLink: data.htmlLink,
-        status: "confirmed"
+        status: "confirmed",
+        isStartup: isStartupEvent(data.summary || "", data.description || "")
       };
     }
   } catch (err: any) {
@@ -278,4 +284,91 @@ export async function createGoogleCalendarEvent(eventData: {
 
   DEFAULT_MOCK_EVENTS.unshift(newEvent);
   return newEvent;
+}
+
+/**
+ * Update an existing event in Google Calendar
+ */
+export async function updateGoogleCalendarEvent(eventId: string, updateData: {
+  summary?: string;
+  description?: string;
+  startIso?: string;
+  durationMinutes?: number;
+  location?: string;
+}): Promise<CalendarEvent | null> {
+  const gcalKey = await getApiKey("google_calendar");
+  let target = DEFAULT_MOCK_EVENTS.find(e => e.id === eventId || e.summary.toLowerCase().includes(eventId.toLowerCase()));
+
+  if (!target) {
+    const events = await getUpcomingCalendarEvents(50);
+    target = events.find(e => e.id === eventId || e.summary.toLowerCase().includes(eventId.toLowerCase()));
+  }
+
+  if (!target) return null;
+
+  if (updateData.summary) target.summary = updateData.summary;
+  if (updateData.description !== undefined) target.description = updateData.description;
+  if (updateData.location) target.location = updateData.location;
+  if (updateData.startIso) {
+    const startDate = new Date(updateData.startIso);
+    const duration = updateData.durationMinutes || 30;
+    target.start = startDate.toISOString();
+    target.end = new Date(startDate.getTime() + duration * 60 * 1000).toISOString();
+  }
+  target.isStartup = isStartupEvent(target.summary, target.description || "");
+
+  if (gcalKey && !gcalKey.startsWith("http")) {
+    try {
+      const calendarId = "primary";
+      const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(target.id)}`;
+      await fetch(url, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${gcalKey}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          summary: target.summary,
+          description: target.description,
+          start: { dateTime: target.start },
+          end: { dateTime: target.end },
+          location: target.location
+        })
+      });
+    } catch (err: any) {
+      console.error("[GCal Connector] Error updating API event:", err.message);
+    }
+  }
+
+  return target;
+}
+
+/**
+ * Delete an event from Google Calendar
+ */
+export async function deleteGoogleCalendarEvent(eventId: string): Promise<boolean> {
+  const gcalKey = await getApiKey("google_calendar");
+  const targetIdx = DEFAULT_MOCK_EVENTS.findIndex(e => e.id === eventId || e.summary.toLowerCase().includes(eventId.toLowerCase()));
+
+  if (targetIdx !== -1) {
+    DEFAULT_MOCK_EVENTS.splice(targetIdx, 1);
+  }
+
+  if (gcalKey && !gcalKey.startsWith("http")) {
+    try {
+      const calendarId = "primary";
+      const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`;
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${gcalKey}`
+        }
+      });
+      return res.ok || res.status === 204;
+    } catch (err: any) {
+      console.error("[GCal Connector] Error deleting API event:", err.message);
+    }
+  }
+
+  return true;
 }
