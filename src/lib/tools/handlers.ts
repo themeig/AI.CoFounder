@@ -1372,13 +1372,10 @@ registry.register({
       location: args.location,
       attendees: args.attendees
     });
-    const directLinkMsg = event.googleCalendarDirectLink
-      ? `\n\n👉 Clicca qui per aggiungerlo direttamente al tuo Google Calendar personale in 1-Click: ${event.googleCalendarDirectLink}`
-      : "";
     return {
       success: true,
       result: event,
-      details: `Evento '${event.summary}' pianificato con successo per il ${new Date(event.start).toLocaleString('it-IT')}.${directLinkMsg}`
+      details: `Evento '${event.summary}' aggiunto e sincronizzato con successo in Google Calendar per il ${new Date(event.start).toLocaleString('it-IT')}.`
     };
   }
 });

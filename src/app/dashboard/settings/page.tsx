@@ -1121,9 +1121,19 @@ export default function SettingsPage() {
                 </p>
               </div>
 
-              <p className="pt-1 text-[10.5px]">
-                <strong>Metodo 2 / Method 2 (Avanzato / Advanced):</strong> Inserisci il tuo <strong>OAuth 2.0 Access Token</strong> (<code>ya29...</code>) o Service Account Key da <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google Cloud Console ↗</a>.
-              </p>
+              {/* Method 2: OAuth Access Token for Direct Write */}
+              <div className="p-3 rounded-lg bg-[#E8F0FE] border border-[#C5D9F9]">
+                <p className="font-bold text-[#1A73E8] mb-1">🔑 Scrittura Diretta senza Link (OAuth Access Token - 100% Automatico):</p>
+                <p className="text-[10.5px] text-[#202124]">
+                  Per permettere al CoFounder di **aggiungere, modificare ed eliminare direttamente gli eventi** dal tuo Google Calendar senza passare da link:
+                  <br />
+                  1. Apri <a href="https://developers.google.com/oauthplayground" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google OAuth2 Playground ↗</a>.
+                  <br />
+                  2. Scorri a <strong>Google Calendar API v3</strong> → Seleziona <code>https://www.googleapis.com/auth/calendar</code> → Clicca <strong>Authorize APIs</strong> e seleziona il tuo account Google (<code>riccardoma07@gmail.com</code>).
+                  <br />
+                  3. Clicca <strong>Exchange authorization code for tokens</strong> → Copia il tuo <strong>Access token</strong> (inizia con <code>ya29...</code>) e incollalo qui sotto!
+                </p>
+              </div>
             </div>
           </div>
 
