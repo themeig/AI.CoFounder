@@ -1476,5 +1476,72 @@ registry.register({
   }
 });
 
+// 31. updateStartupInfo (Update Startup KPIs & Phase)
+registry.register({
+  name: "updateStartupInfo",
+  emoji: "📊",
+  schema: {
+    type: "function",
+    function: {
+      name: "updateStartupInfo",
+      description: "Aggiorna i dati ed i KPI della startup (MRR, numero di utenti, burn rate, runway, fase/stato) direttamente nel database.",
+      parameters: {
+        type: "object",
+        properties: {
+          mrr: { type: "number", description: "Nuovo valore MRR mensile in $ (es: 8500)." },
+          users: { type: "integer", description: "Nuovo numero di utenti attivi (es: 27000)." },
+          burnRate: { type: "number", description: "Nuovo burn rate mensile in $ (es: 5000)." },
+          runway: { type: "number", description: "Nuova runway in mesi (es: 18)." },
+          phase: { type: "string", description: "Nuova fase della startup. Esempi: 'pre-seed', 'seed', 'mvp', 'growth', 'scaling', 'profitable'." },
+          sector: { type: "string", description: "Nuovo settore della startup (es: 'saas', 'ai', 'fintech')." }
+        }
+      }
+    }
+  },
+  handler: async (args, context) => {
+    if (context.push) {
+      context.push("tool_start", { name: "updateStartupInfo", label: "Aggiornamento metriche startup nel database..." });
+    }
+
+    const headers = {
+      "apikey": SUPABASE_SERVICE_KEY,
+      "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
+      "Content-Type": "application/json",
+      "Prefer": "return=representation",
+    };
+
+    const userRes = await fetch(`${SUPABASE_URL}/rest/v1/User?email=eq.demo@agentfoundry.ai&select=id`, { headers });
+    const userList = await userRes.json();
+    const userId = userList && Array.isArray(userList) && userList.length > 0 ? userList[0].id : null;
+    if (!userId) throw new Error("Utente non trovato.");
+
+    const startupRes = await fetch(`${SUPABASE_URL}/rest/v1/Startup?userId=eq.${userId}&select=*`, { headers });
+    const startups = await startupRes.json();
+    if (!startups || startups.length === 0) throw new Error("Startup non trovata.");
+
+    const startupId = startups[0].id;
+    const updatePayload: any = {};
+    if (args.mrr !== undefined) updatePayload.mrr = Number(args.mrr);
+    if (args.users !== undefined) updatePayload.users = Number(args.users);
+    if (args.burnRate !== undefined) updatePayload.burnRate = Number(args.burnRate);
+    if (args.runway !== undefined) updatePayload.runway = Number(args.runway);
+    if (args.phase !== undefined) updatePayload.phase = String(args.phase);
+    if (args.sector !== undefined) updatePayload.sector = String(args.sector);
+
+    const updateRes = await fetch(`${SUPABASE_URL}/rest/v1/Startup?id=eq.${startupId}`, {
+      method: "PATCH",
+      headers,
+      body: JSON.stringify(updatePayload)
+    });
+    const updated = await updateRes.json();
+
+    return {
+      success: true,
+      result: updated && updated.length > 0 ? updated[0] : updatePayload,
+      details: `Metriche startup aggiornate nel database: ${JSON.stringify(updatePayload)}`
+    };
+  }
+});
+
 export { registry };
 

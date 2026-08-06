@@ -71,7 +71,7 @@ export async function POST(req: Request) {
       }),
     });
 
-    // 4. Optionally update Startup phase if pivot or fail
+    // 4. Optionally update Startup phase if pivot, fail or growing
     if (status === "failed") {
       await supabaseFetch(`/Startup?id=eq.${startup.id}`, {
         method: "PATCH",
@@ -80,16 +80,14 @@ export async function POST(req: Request) {
     } else if (status === "pivot") {
       await supabaseFetch(`/Startup?id=eq.${startup.id}`, {
         method: "PATCH",
-        body: JSON.stringify({ phase: "pivot" }),
+        body: JSON.stringify({ phase: "pre-seed" }),
       });
     } else if (status === "growing") {
-      // If growing, maybe advance phase if in idea
-      if (startup.phase === "idea") {
-        await supabaseFetch(`/Startup?id=eq.${startup.id}`, {
-          method: "PATCH",
-          body: JSON.stringify({ phase: "mvp" }),
-        });
-      }
+      const newPhase = (startup.phase === "failed" || startup.phase === "idea") ? "pre-seed" : startup.phase;
+      await supabaseFetch(`/Startup?id=eq.${startup.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ phase: newPhase }),
+      });
     }
 
     // 5. Trigger Analyzer

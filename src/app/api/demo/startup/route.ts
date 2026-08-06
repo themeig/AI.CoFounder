@@ -67,3 +67,48 @@ export async function GET() {
     }]);
   }
 }
+
+export async function PUT(req: Request) {
+  try {
+    const body = await req.json();
+    const { mrr, users, burnRate, runway, phase, sector, name, description } = body;
+
+    const usersList = await supabaseFetch("/User?email=eq.demo@agentfoundry.ai&select=id");
+    const userId = usersList && Array.isArray(usersList) && usersList.length > 0 ? usersList[0].id : null;
+
+    if (!userId) {
+      return NextResponse.json({ error: "Utente non trovato." }, { status: 404 });
+    }
+
+    const startups = await supabaseFetch(`/Startup?userId=eq.${userId}&select=*`);
+    if (!startups || startups.length === 0) {
+      return NextResponse.json({ error: "Startup non trovata." }, { status: 404 });
+    }
+
+    const startupId = startups[0].id;
+    const updatePayload: any = {};
+
+    if (mrr !== undefined) updatePayload.mrr = Number(mrr);
+    if (users !== undefined) updatePayload.users = Number(users);
+    if (burnRate !== undefined) updatePayload.burnRate = Number(burnRate);
+    if (runway !== undefined) updatePayload.runway = Number(runway);
+    if (phase !== undefined) updatePayload.phase = String(phase);
+    if (sector !== undefined) updatePayload.sector = String(sector);
+    if (name !== undefined) updatePayload.name = String(name);
+    if (description !== undefined) updatePayload.description = String(description);
+
+    const updated = await supabaseFetch(`/Startup?id=eq.${startupId}`, {
+      method: "PATCH",
+      body: JSON.stringify(updatePayload),
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "✓ Metriche startup aggiornate con successo nel database!",
+      startup: updated && updated.length > 0 ? updated[0] : updatePayload
+    });
+  } catch (err: any) {
+    console.error("[Startup PUT Error]:", err?.message || err);
+    return NextResponse.json({ error: err?.message || "Impossibile aggiornare i dati della startup." }, { status: 500 });
+  }
+}

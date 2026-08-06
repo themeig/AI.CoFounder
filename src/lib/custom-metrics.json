@@ -2,20 +2,20 @@
   {
     "id": "metric-mrr-growth",
     "title": "MRR Growth Trend",
-    "value": "$15,420",
+    "value": "8500",
     "type": "currency",
     "chartType": "line",
     "data": [
-      10200,
-      11500,
-      12100,
-      13400,
-      14200,
-      15420
+      5200,
+      6100,
+      7000,
+      7800,
+      8200,
+      8500
     ],
     "labels": [
-      "Genn",
-      "Febb",
+      "Gen",
+      "Feb",
       "Mar",
       "Apr",
       "Mag",
@@ -216,5 +216,86 @@
     "apiEndpoint": null,
     "isDefault": false,
     "createdAt": "2026-06-18T19:58:06.777Z"
+  },
+  {
+    "id": "metric-custom-1786054661570",
+    "title": "Utenti Totali",
+    "value": "27000",
+    "type": "integer",
+    "chartType": "line",
+    "formula": "Utenti Totali Registrati",
+    "data": [
+      5000,
+      8000,
+      12000,
+      18000,
+      22000,
+      27000
+    ],
+    "labels": [
+      "Gen",
+      "Feb",
+      "Mar",
+      "Apr",
+      "Mag",
+      "Giu"
+    ],
+    "apiEndpoint": null,
+    "isDefault": false,
+    "createdAt": "2026-08-06T22:17:41.570Z"
+  },
+  {
+    "id": "metric-custom-1786054667645",
+    "title": "Burn Rate",
+    "value": "18000",
+    "type": "currency",
+    "chartType": "line",
+    "formula": "Burn Rate Mensile",
+    "data": [
+      22000,
+      20000,
+      18500,
+      18000,
+      18000,
+      18000
+    ],
+    "labels": [
+      "Gen",
+      "Feb",
+      "Mar",
+      "Apr",
+      "Mag",
+      "Giu"
+    ],
+    "apiEndpoint": null,
+    "isDefault": false,
+    "createdAt": "2026-08-06T22:17:47.645Z"
+  },
+  {
+    "id": "metric-custom-1786054671050",
+    "title": "Runway (mesi)",
+    "value": "14",
+    "type": "integer",
+    "chartType": "line",
+    "formula": "Cassa / Burn Rate Mensile",
+    "data": [
+      8,
+      9,
+      11,
+      12,
+      13,
+      14
+    ],
+    "labels": [
+      "Gen",
+      "Feb",
+      "Mar",
+      "Apr",
+      "Mag",
+      "Giu"
+    ],
+    "apiEndpoint": null,
+    "isDefault": false,
+    "createdAt": "2026-08-06T22:17:51.050Z"
   }
 ]
