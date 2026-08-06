@@ -6,10 +6,16 @@ import { hasApiKey } from "@/lib/secure-store";
  * GET /api/demo/calendar
  * Returns upcoming Google Calendar events and connection status.
  */
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const url = new URL(req.url);
+    const startupOnly = url.searchParams.get("startupOnly") === "true";
     const isConfigured = await hasApiKey("google_calendar");
-    const events = await getUpcomingCalendarEvents(10);
+    let events = await getUpcomingCalendarEvents(20);
+
+    if (startupOnly) {
+      events = events.filter(e => e.isStartup);
+    }
 
     return NextResponse.json({
       configured: isConfigured,

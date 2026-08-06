@@ -10,6 +10,31 @@ export interface CalendarEvent {
   attendees?: string[];
   htmlLink?: string;
   status?: "confirmed" | "tentative" | "cancelled";
+  isStartup?: boolean;
+}
+
+export function isStartupEvent(summary: string, description = ""): boolean {
+  const combined = `${summary} ${description}`.toLowerCase();
+  
+  // Explicit tags
+  if (combined.includes("#startup") || combined.includes("[startup]") || combined.includes("#work") || combined.includes("[work]")) {
+    return true;
+  }
+  
+  // Startup Emojis
+  if (/[🚀💼🎙️📊🛠️💻🎯📈💵🤝🏢]/u.test(summary) || /[🚀💼🎙️📊🛠️💻🎯📈💵🤝🏢]/u.test(description)) {
+    return true;
+  }
+
+  // Work & Startup Keywords
+  const startupKeywords = [
+    "pitch", "investor", "call", "meeting", "riunione", "demo", "sprint", 
+    "standup", "review", "client", "cliente", "saas", "cofounder", "co-founder",
+    "marketing", "tech", "finance", "legal", "ops", "dev", "release", "board", 
+    "vc", "angel", "fundraising", "mrr", "kpi", "roadmap", "sync", "briefing", "agent", "work"
+  ];
+
+  return startupKeywords.some(kw => combined.includes(kw));
 }
 
 const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
@@ -88,14 +113,17 @@ function parseICSEvents(icsText: string, maxResults = 10): CalendarEvent[] {
       const endDate = parseICSDate(rawEnd);
 
       if (startDate && startDate >= new Date(now.getTime() - 24 * 60 * 60 * 1000)) {
+        const summary = summaryMatch ? summaryMatch[1].trim().replace(/\\,/g, ",") : "Evento Google Calendar";
+        const description = descMatch ? descMatch[1].trim().replace(/\\n/g, "\n") : "";
         events.push({
           id: `ics-${i}-${startDate.getTime()}`,
-          summary: summaryMatch ? summaryMatch[1].trim().replace(/\\,/g, ",") : "Evento Google Calendar",
-          description: descMatch ? descMatch[1].trim().replace(/\\n/g, "\n") : "",
+          summary,
+          description,
           start: startDate.toISOString(),
           end: endDate ? endDate.toISOString() : startDate.toISOString(),
           location: locationMatch ? locationMatch[1].trim() : "Google Calendar",
-          status: "confirmed"
+          status: "confirmed",
+          isStartup: isStartupEvent(summary, description)
         });
       }
     }
@@ -155,17 +183,22 @@ export async function getUpcomingCalendarEvents(maxResults = 10): Promise<Calend
     if (res.ok) {
       const data = await res.json();
       const items = data.items || [];
-      return items.map((item: any) => ({
-        id: item.id,
-        summary: item.summary || "Senza titolo",
-        description: item.description || "",
-        start: item.start?.dateTime || item.start?.date || new Date().toISOString(),
-        end: item.end?.dateTime || item.end?.date || new Date().toISOString(),
-        location: item.location || "Google Meet",
-        attendees: (item.attendees || []).map((a: any) => a.email),
-        htmlLink: item.htmlLink,
-        status: item.status || "confirmed"
-      }));
+      return items.map((item: any) => {
+        const summary = item.summary || "Senza titolo";
+        const description = item.description || "";
+        return {
+          id: item.id,
+          summary,
+          description,
+          start: item.start?.dateTime || item.start?.date || new Date().toISOString(),
+          end: item.end?.dateTime || item.end?.date || new Date().toISOString(),
+          location: item.location || "Google Meet",
+          attendees: (item.attendees || []).map((a: any) => a.email),
+          htmlLink: item.htmlLink,
+          status: item.status || "confirmed",
+          isStartup: isStartupEvent(summary, description)
+        };
+      });
     }
   } catch (err: any) {
     console.error("[GCal Connector] Error fetching API events:", err.message);

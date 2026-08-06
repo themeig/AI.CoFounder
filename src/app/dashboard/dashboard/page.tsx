@@ -86,6 +86,24 @@ export default function DashboardHome() {
   const [syncingCalendar, setSyncingCalendar] = useState(false);
   const [calendarSyncResult, setCalendarSyncResult] = useState<string | null>(null);
 
+  // Google Calendar state
+  const [calendarEvents, setCalendarEvents] = useState<any[]>([]);
+  const [calendarFilter, setCalendarFilter] = useState<'startup' | 'all'>('startup');
+  const [calendarLoading, setCalendarLoading] = useState(true);
+
+  useEffect(() => {
+    setCalendarLoading(true);
+    fetch(`/api/demo/calendar${calendarFilter === 'startup' ? '?startupOnly=true' : ''}`)
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data.events)) {
+          setCalendarEvents(data.events);
+        }
+      })
+      .catch(() => {})
+      .finally(() => setCalendarLoading(false));
+  }, [calendarFilter]);
+
   const handleSyncToCalendar = async () => {
     if (!todayBriefing) return;
     setSyncingCalendar(true);
@@ -330,6 +348,114 @@ export default function DashboardHome() {
           icon="#EA4335"
           sub={`Burn: $${(startup.burnRate ?? 0).toLocaleString()}/mo`}
         />
+      </div>
+
+      {/* ── Google Calendar Startup Events Widget ───────────────── */}
+      <div className="rounded-2xl overflow-hidden" style={{ background: "#FFFFFF", border: "1px solid #E8EAED", boxShadow: "0 1px 3px rgba(60,64,67,0.08)" }}>
+        {/* Header */}
+        <div className="px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4" style={{ background: "#F8F9FA", borderBottom: "1px solid #E8EAED" }}>
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#E8F0FE] text-[#1A73E8] flex items-center justify-center text-lg font-bold shadow-xs">
+              📅
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-bold text-sm" style={{ color: "#202124" }}>
+                  {language === "en" ? "Startup Calendar Events" : "Eventi Google Calendar Startup"}
+                </h2>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#E8F0FE] text-[#1A73E8]">
+                  {calendarFilter === 'startup' ? '💼 Solo Startup' : '🌐 Tutti gli Eventi'}
+                </span>
+              </div>
+              <p className="text-[11px] mt-0.5" style={{ color: "#5F6368" }}>
+                {language === "en"
+                  ? "Salient startup & business meetings separated from personal calendar events"
+                  : "Eventi salienti della startup separati dagli appuntamenti personali"}
+              </p>
+            </div>
+          </div>
+
+          {/* Filter Pills */}
+          <div className="flex items-center gap-1.5 p-1 rounded-xl bg-[#F1F3F4]">
+            <button
+              onClick={() => setCalendarFilter('startup')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                calendarFilter === 'startup'
+                  ? 'bg-white text-[#1A73E8] shadow-xs'
+                  : 'text-[#5F6368] hover:text-[#202124]'
+              }`}
+            >
+              💼 Solo Startup
+            </button>
+            <button
+              onClick={() => setCalendarFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                calendarFilter === 'all'
+                  ? 'bg-white text-[#202124] shadow-xs'
+                  : 'text-[#5F6368] hover:text-[#202124]'
+              }`}
+            >
+              🌐 Tutti gli Eventi
+            </button>
+          </div>
+        </div>
+
+        {/* Content Body */}
+        <div className="p-6">
+          {calendarLoading ? (
+            <div className="py-8 text-center text-xs text-[#5F6368] flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-[#1A73E8] border-t-transparent rounded-full animate-spin" />
+              <span>Sincronizzazione eventi Google Calendar in corso...</span>
+            </div>
+          ) : calendarEvents.length === 0 ? (
+            <div className="py-8 text-center text-xs text-[#5F6368]">
+              <p className="font-semibold text-sm text-[#202124] mb-1">Nessun evento {calendarFilter === 'startup' ? 'startup' : ''} trovato</p>
+              <p>Non ci sono impegni {calendarFilter === 'startup' ? 'flaggati per la startup' : 'in agenda'}.</p>
+            </div>
+          ) : (
+            <div className="grid md:grid-cols-2 gap-3">
+              {calendarEvents.map((evt) => (
+                <div
+                  key={evt.id}
+                  className="p-4 rounded-xl border transition-all flex flex-col justify-between space-y-3"
+                  style={{
+                    background: evt.isStartup ? "#F8FAFF" : "#FFFFFF",
+                    borderColor: evt.isStartup ? "#C5D9F9" : "#E8EAED"
+                  }}
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-2 mb-1.5">
+                      <h3 className="font-semibold text-xs leading-snug" style={{ color: "#202124" }}>
+                        {evt.summary}
+                      </h3>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold flex-shrink-0 ${
+                        evt.isStartup ? "bg-[#E8F0FE] text-[#1A73E8]" : "bg-[#F1F3F4] text-[#5F6368]"
+                      }`}>
+                        {evt.isStartup ? "🚀 Startup" : "👤 Personale"}
+                      </span>
+                    </div>
+                    {evt.description && (
+                      <p className="text-[11px] line-clamp-2 leading-relaxed" style={{ color: "#5F6368" }}>
+                        {evt.description}
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="pt-2 flex items-center justify-between text-[10.5px] border-t border-[#E8EAED]" style={{ color: "#5F6368" }}>
+                    <div className="flex items-center gap-1.5">
+                      <span>🕒</span>
+                      <span>{new Date(evt.start).toLocaleString("it-IT", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <span>📍</span>
+                      <span className="truncate max-w-[120px]">{evt.location || "Google Meet"}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ── Daily Standup Meeting Room (Multi-Agent Team Briefing) ── */}
