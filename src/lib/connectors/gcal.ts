@@ -11,6 +11,18 @@ export interface CalendarEvent {
   htmlLink?: string;
   status?: "confirmed" | "tentative" | "cancelled";
   isStartup?: boolean;
+  googleCalendarDirectLink?: string;
+}
+
+function formatGCalDateTime(date: Date): string {
+  return date.toISOString().replace(/-|:|\.\d\d\d/g, "");
+}
+
+export function generateGoogleCalendarDirectLink(summary: string, startIso: string, durationMinutes = 30, description = "", location = "Google Meet"): string {
+  const startDate = new Date(startIso);
+  const endDate = new Date(startDate.getTime() + durationMinutes * 60 * 1000);
+  const dates = `${formatGCalDateTime(startDate)}/${formatGCalDateTime(endDate)}`;
+  return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(summary)}&dates=${dates}&details=${encodeURIComponent(description)}&location=${encodeURIComponent(location)}`;
 }
 
 export function isStartupEvent(summary: string, description = ""): boolean {
@@ -47,7 +59,8 @@ const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
     location: "Google Meet",
     attendees: ["founder@startup.com", "cofounder@agentfoundry.ai"],
     status: "confirmed",
-    isStartup: true
+    isStartup: true,
+    googleCalendarDirectLink: generateGoogleCalendarDirectLink("🎙️ Daily Team Standup — AI.CoFounder", new Date(Date.now() + 1000 * 60 * 60 * 2).toISOString())
   },
   {
     id: "evt-gcal-2",
@@ -58,7 +71,8 @@ const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
     location: "Google Meet / Remote",
     attendees: ["founder@startup.com", "angel1@venture.vc"],
     status: "confirmed",
-    isStartup: true
+    isStartup: true,
+    googleCalendarDirectLink: generateGoogleCalendarDirectLink("💼 Pitch Review & Investor Call", new Date(Date.now() + 1000 * 60 * 60 * 26).toISOString())
   },
   {
     id: "evt-gcal-3",
@@ -69,7 +83,8 @@ const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
     location: "AI.CoFounder Workspace",
     attendees: ["founder@startup.com", "marketing-agent@agentfoundry.ai"],
     status: "confirmed",
-    isStartup: true
+    isStartup: true,
+    googleCalendarDirectLink: generateGoogleCalendarDirectLink("🚀 Review Campagne Growth & Marketing", new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString())
   }
 ];
 
@@ -115,15 +130,17 @@ function parseICSEvents(icsText: string, maxResults = 10): CalendarEvent[] {
       if (startDate && startDate >= new Date(now.getTime() - 24 * 60 * 60 * 1000)) {
         const summary = summaryMatch ? summaryMatch[1].trim().replace(/\\,/g, ",") : "Evento Google Calendar";
         const description = descMatch ? descMatch[1].trim().replace(/\\n/g, "\n") : "";
+        const location = locationMatch ? locationMatch[1].trim() : "Google Calendar";
         events.push({
           id: `ics-${i}-${startDate.getTime()}`,
           summary,
           description,
           start: startDate.toISOString(),
           end: endDate ? endDate.toISOString() : startDate.toISOString(),
-          location: locationMatch ? locationMatch[1].trim() : "Google Calendar",
+          location,
           status: "confirmed",
-          isStartup: isStartupEvent(summary, description)
+          isStartup: isStartupEvent(summary, description),
+          googleCalendarDirectLink: generateGoogleCalendarDirectLink(summary, startDate.toISOString(), 30, description, location)
         });
       }
     }
@@ -159,7 +176,6 @@ export async function getUpcomingCalendarEvents(maxResults = 10): Promise<Calend
         const icsText = await resIcs.text();
         const parsedEvents = parseICSEvents(icsText, maxResults);
         if (parsedEvents.length > 0) {
-          // Merge with any newly created local events
           const createdMockEvents = DEFAULT_MOCK_EVENTS.filter(e => e.id.startsWith("evt-gcal-"));
           const combined = [...createdMockEvents, ...parsedEvents];
           combined.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
@@ -190,17 +206,21 @@ export async function getUpcomingCalendarEvents(maxResults = 10): Promise<Calend
       return items.map((item: any) => {
         const summary = item.summary || "Senza titolo";
         const description = item.description || "";
+        const startIso = item.start?.dateTime || item.start?.date || new Date().toISOString();
+        const endIso = item.end?.dateTime || item.end?.date || new Date().toISOString();
+        const location = item.location || "Google Meet";
         return {
           id: item.id,
           summary,
           description,
-          start: item.start?.dateTime || item.start?.date || new Date().toISOString(),
-          end: item.end?.dateTime || item.end?.date || new Date().toISOString(),
-          location: item.location || "Google Meet",
+          start: startIso,
+          end: endIso,
+          location,
           attendees: (item.attendees || []).map((a: any) => a.email),
           htmlLink: item.htmlLink,
           status: item.status || "confirmed",
-          isStartup: isStartupEvent(summary, description)
+          isStartup: isStartupEvent(summary, description),
+          googleCalendarDirectLink: generateGoogleCalendarDirectLink(summary, startIso, 30, description, location)
         };
       });
     }
@@ -227,6 +247,14 @@ export async function createGoogleCalendarEvent(eventData: {
   const startDate = new Date(eventData.startIso);
   const endDate = new Date(startDate.getTime() + duration * 60 * 1000);
 
+  const directLink = generateGoogleCalendarDirectLink(
+    eventData.summary,
+    startDate.toISOString(),
+    duration,
+    eventData.description || "",
+    eventData.location || "Google Meet"
+  );
+
   const newEvent: CalendarEvent = {
     id: "evt-gcal-" + Date.now(),
     summary: eventData.summary,
@@ -236,7 +264,8 @@ export async function createGoogleCalendarEvent(eventData: {
     location: eventData.location || "Google Meet",
     attendees: eventData.attendees || ["founder@startup.com"],
     status: "confirmed",
-    isStartup: isStartupEvent(eventData.summary, eventData.description || "")
+    isStartup: isStartupEvent(eventData.summary, eventData.description || ""),
+    googleCalendarDirectLink: directLink
   };
 
   if (!gcalKey || gcalKey.startsWith("http")) {
@@ -275,7 +304,8 @@ export async function createGoogleCalendarEvent(eventData: {
         location: data.location || "Google Meet",
         htmlLink: data.htmlLink,
         status: "confirmed",
-        isStartup: isStartupEvent(data.summary || "", data.description || "")
+        isStartup: isStartupEvent(data.summary || "", data.description || ""),
+        googleCalendarDirectLink: directLink
       };
     }
   } catch (err: any) {
@@ -316,6 +346,7 @@ export async function updateGoogleCalendarEvent(eventId: string, updateData: {
     target.end = new Date(startDate.getTime() + duration * 60 * 1000).toISOString();
   }
   target.isStartup = isStartupEvent(target.summary, target.description || "");
+  target.googleCalendarDirectLink = generateGoogleCalendarDirectLink(target.summary, target.start, 30, target.description || "", target.location || "Google Meet");
 
   if (gcalKey && !gcalKey.startsWith("http")) {
     try {

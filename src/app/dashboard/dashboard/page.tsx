@@ -446,10 +446,21 @@ export default function DashboardHome() {
                       <span>🕒</span>
                       <span>{new Date(evt.start).toLocaleString("it-IT", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <span>📍</span>
-                      <span className="truncate max-w-[120px]">{evt.location || "Google Meet"}</span>
-                    </div>
+                    {evt.googleCalendarDirectLink ? (
+                      <a
+                        href={evt.googleCalendarDirectLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-1 px-2 py-0.5 rounded bg-[#E8F0FE] text-[#1A73E8] font-bold text-[10px] hover:underline"
+                      >
+                        <span>➕ Google Calendar ↗</span>
+                      </a>
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <span>📍</span>
+                        <span className="truncate max-w-[120px]">{evt.location || "Google Meet"}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
               ))}

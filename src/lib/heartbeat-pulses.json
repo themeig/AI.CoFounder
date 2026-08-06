@@ -6,7 +6,7 @@
       "title": "🎙️ Daily Standup di Oggi (6 ago)",
       "body": "La riunione del team è completata. Il coFounder ed i dipendenti hanno elaborato 3 priorità operative per oggi.",
       "priority": "high",
-      "read": false,
+      "read": true,
       "createdAt": "2026-08-06T21:28:54.003Z",
       "actionUrl": "/dashboard/dashboard",
       "actionText": "Vedi Riunione"

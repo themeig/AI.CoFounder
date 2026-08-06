@@ -3225,31 +3225,6 @@
     "updatedAt": "2026-07-25T19:52:21.869Z"
   },
   {
-    "id": "disc_yku33v8xepn",
-    "title": "ciao cosa puoi fare sono nuovo...",
-    "messages": [
-      {
-        "role": "user",
-        "content": "What is the best financial plan to extend our runway?",
-        "timestamp": "21:24"
-      },
-      {
-        "role": "assistant",
-        "content": "",
-        "thinking": "\n[Debug] 🧠 Ricerca ricordi mnemonici (Mnemosyne) per Co-Founder...\n[Debug] 🧠 Caricati 3 ricordi pertinenti dalla memoria semantica.\n[Debug] 📊 Ricerca casi di studio (Storie) pertinenti per Co-Founder...\n[Debug] 📊 Caricate 3 storie pertinenti dal database.\n[Debug] ⚠️ Chiamata OpenRouter fallita per \"openrouter/free\". Fallback a \"google/gemini-2.5-flash\"...\n[Debug] ⚠️ Chiamata OpenRouter fallita (tentativo 2/3). Riprovo in 1000ms...",
-        "timestamp": "21:25",
-        "tools": [],
-        "delegations": [],
-        "agentSuggestion": null,
-        "thinkingTime": "2.3",
-        "isStreaming": false
-      }
-    ],
-    "todos": [],
-    "createdAt": "2026-07-25T19:23:34.149Z",
-    "updatedAt": "2026-07-25T19:25:38.970Z"
-  },
-  {
     "id": "disc_5hp3tepl51w",
     "title": "controlla il calendario e dimm...",
     "messages": [
@@ -3480,5 +3455,60 @@
     "todos": [],
     "createdAt": "2026-08-06T21:45:58.603Z",
     "updatedAt": "2026-08-06T21:48:40.214Z"
+  },
+  {
+    "id": "disc_mqc9ndvdeub",
+    "title": "aggiungi un nuovo evento sul c...",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Hi! I am your AI CoFounder. I can help you manage your team, create specialized agents, or update startup metrics in real time. What should we tackle today?",
+        "timestamp": "14:52"
+      },
+      {
+        "role": "user",
+        "content": "aggiungi un nuovo evento sul calendario per domani e chiamalo evento test",
+        "timestamp": "14:52"
+      },
+      {
+        "role": "assistant",
+        "content": "Fatto! Ho creato l'evento **\"evento test\"** per domani (7 agosto 2026) alle 08:00 UTC (durata 30 minuti, su Google Meet). L'evento è confermato con ID `evt-gcal-1786053182305`.\n\nVuoi che aggiunga altri dettagli (descrizione più completa, partecipanti specifici, cambio orario o durata)?",
+        "thinking": "\n[Debug] 🧠 Ricerca ricordi mnemonici (Mnemosyne) per Co-Founder...\n[Debug] 🧠 Caricati 3 ricordi pertinenti dalla memoria semantica.\n[Debug] 📊 Ricerca casi di studio (Storie) pertinenti per Co-Founder...\n[Debug] 📊 Caricate 2 storie pertinenti dal database.The user wants to add a new calendar event for tomorrow called \"evento test\". I need to use the createCalendarEvent tool. First, I need to determine the date for tomorrow. Today is August 6, 2026, so tomorrow is August 7, 2026. I need to provide a start time in ISO format. The user didn't specify a time, so I should pick a reasonable default, maybe 10:00 AM local time? But I need to know the timezone. The system says the current date is August 6, 2026, but doesn't specify timezone. I'll assume UTC or maybe the user's local time. Since the user is likely in Italy (given the Italian language), I'll use CEST (UTC+2). But the ISO string should be in UTC. Let's pick 10:00 AM CEST which is 08:00 UTC. So startIso: \"2026-08-07T08:00:00Z\". Duration default is 30 minutes. I'll also add a description. Let's call the tool.The event has been created successfully. Let me inform the founder.",
+        "timestamp": "14:53",
+        "tools": [
+          {
+            "name": "createCalendarEvent",
+            "success": true,
+            "details": "Evento 'evento test' pianificato con successo per il 07/08/2026, 01:00:00.",
+            "arguments": {
+              "durationMinutes": 30,
+              "startIso": "2026-08-07T08:00:00Z",
+              "description": "Evento di test creato su richiesta del founder",
+              "summary": "evento test"
+            },
+            "result": {
+              "id": "evt-gcal-1786053182305",
+              "summary": "evento test",
+              "description": "Evento di test creato su richiesta del founder",
+              "start": "2026-08-07T08:00:00.000Z",
+              "end": "2026-08-07T08:30:00.000Z",
+              "location": "Google Meet",
+              "attendees": [
+                "founder@startup.com"
+              ],
+              "status": "confirmed",
+              "isStartup": false
+            }
+          }
+        ],
+        "delegations": [],
+        "agentSuggestion": null,
+        "thinkingTime": "14.8",
+        "isStreaming": false
+      }
+    ],
+    "todos": [],
+    "createdAt": "2026-08-06T21:52:36.275Z",
+    "updatedAt": "2026-08-06T21:53:07.557Z"
   }
 ]
