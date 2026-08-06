@@ -1,12 +1,45 @@
 {
   "pulses": [
     {
+      "id": "pulse-briefing-1786051734002",
+      "type": "action",
+      "title": "🎙️ Daily Standup di Oggi (6 ago)",
+      "body": "La riunione del team è completata. Il coFounder ed i dipendenti hanno elaborato 3 priorità operative per oggi.",
+      "priority": "high",
+      "read": false,
+      "createdAt": "2026-08-06T21:28:54.003Z",
+      "actionUrl": "/dashboard/dashboard",
+      "actionText": "Vedi Riunione"
+    },
+    {
+      "id": "pulse-1786051432635-0",
+      "type": "positive",
+      "title": "Analisi completata con successo",
+      "body": "Tutte le metriche finanziarie e operative rientrano nei parametri di crescita previsti per la fase attuale.",
+      "priority": "low",
+      "read": true,
+      "createdAt": "2026-08-06T21:23:52.635Z",
+      "actionUrl": "/dashboard/metrics",
+      "actionText": "Visualizza Dashboard"
+    },
+    {
+      "id": "pulse-1786051432635-1",
+      "type": "idea",
+      "title": "Ottimizzazione strategie di acquisizione",
+      "body": "Consigliata una revisione delle campagne marketing per sfruttare l'elevato LTV del settore.",
+      "priority": "medium",
+      "read": true,
+      "createdAt": "2026-08-06T21:23:52.635Z",
+      "actionUrl": "/dashboard/agents",
+      "actionText": "Parla con il Marketing Agent"
+    },
+    {
       "id": "pulse-briefing-1785454513202",
       "type": "action",
       "title": "🎙️ Daily Standup di Oggi (30 lug)",
       "body": "La riunione del team è completata. Il coFounder ed i dipendenti hanno elaborato 3 priorità operative per oggi.",
       "priority": "high",
-      "read": false,
+      "read": true,
       "createdAt": "2026-07-30T23:35:13.203Z",
       "actionUrl": "/dashboard/dashboard",
       "actionText": "Vedi Riunione"
@@ -17,7 +50,7 @@
       "title": "🎙️ Daily Standup di Oggi (30 lug)",
       "body": "La riunione del team è completata. Il coFounder ed i dipendenti hanno elaborato 3 priorità operative per oggi.",
       "priority": "high",
-      "read": false,
+      "read": true,
       "createdAt": "2026-07-30T23:30:19.327Z",
       "actionUrl": "/dashboard/dashboard",
       "actionText": "Vedi Riunione"
@@ -111,5 +144,5 @@
       "actionText": "Consulta Playbook Funding"
     }
   ],
-  "lastRunAt": "2026-07-30T23:22:49.580Z"
+  "lastRunAt": "2026-08-06T21:23:52.636Z"
 }

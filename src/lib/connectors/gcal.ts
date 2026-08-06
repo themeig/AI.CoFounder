@@ -17,7 +17,7 @@ const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
     id: "evt-gcal-1",
     summary: "🎙️ Daily Team Standup — AI.CoFounder",
     description: "Briefing giornaliero automatico con il team di dipendenti AI ed il coFounder.",
-    start: new Date(Date.now() + 1000 * 60 * 60 * 2).toISOString(), // 2 hours from now
+    start: new Date(Date.now() + 1000 * 60 * 60 * 2).toISOString(),
     end: new Date(Date.now() + 1000 * 60 * 60 * 2.5).toISOString(),
     location: "Google Meet",
     attendees: ["founder@startup.com", "cofounder@agentfoundry.ai"],
@@ -27,7 +27,7 @@ const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
     id: "evt-gcal-2",
     summary: "💼 Pitch Review & Investor Call (Pre-Seed Round)",
     description: "Incontro con Business Angels per presentare le KPI ed il pitch deck di crescita.",
-    start: new Date(Date.now() + 1000 * 60 * 60 * 26).toISOString(), // Tomorrow
+    start: new Date(Date.now() + 1000 * 60 * 60 * 26).toISOString(),
     end: new Date(Date.now() + 1000 * 60 * 60 * 27).toISOString(),
     location: "Google Meet / Remote",
     attendees: ["founder@startup.com", "angel1@venture.vc"],
@@ -37,13 +37,73 @@ const DEFAULT_MOCK_EVENTS: CalendarEvent[] = [
     id: "evt-gcal-3",
     summary: "🚀 Review Campagne Growth & Marketing",
     description: "Sessione di verifica CAC e conversioni con il Marketing Agent.",
-    start: new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString(), // 2 days from now
+    start: new Date(Date.now() + 1000 * 60 * 60 * 48).toISOString(),
     end: new Date(Date.now() + 1000 * 60 * 60 * 49).toISOString(),
     location: "AI.CoFounder Workspace",
     attendees: ["founder@startup.com", "marketing-agent@agentfoundry.ai"],
     status: "confirmed"
   }
 ];
+
+/**
+ * Helper to parse iCal / ICS format feed from Google Calendar
+ */
+function parseICSDate(icsDateStr: string): Date | null {
+  try {
+    const clean = icsDateStr.replace(/[^0-9T]/g, "");
+    if (clean.length >= 8) {
+      const year = parseInt(clean.substring(0, 4), 10);
+      const month = parseInt(clean.substring(4, 6), 10) - 1;
+      const day = parseInt(clean.substring(6, 8), 10);
+      let hour = 0, min = 0, sec = 0;
+      if (clean.includes("T") && clean.length >= 13) {
+        const timePart = clean.split("T")[1];
+        hour = parseInt(timePart.substring(0, 2), 10);
+        min = parseInt(timePart.substring(2, 4), 10);
+        sec = parseInt(timePart.substring(4, 6) || "0", 10);
+      }
+      return new Date(Date.UTC(year, month, day, hour, min, sec));
+    }
+  } catch {}
+  return null;
+}
+
+function parseICSEvents(icsText: string, maxResults = 10): CalendarEvent[] {
+  const events: CalendarEvent[] = [];
+  const vevents = icsText.split("BEGIN:VEVENT");
+  const now = new Date();
+
+  for (let i = 1; i < vevents.length; i++) {
+    const block = vevents[i].split("END:VEVENT")[0];
+    const summaryMatch = block.match(/SUMMARY:(.*)/);
+    const descMatch = block.match(/DESCRIPTION:(.*)/);
+    const dtstartMatch = block.match(/DTSTART(?:;[^:]+)?:(.*)/);
+    const dtendMatch = block.match(/DTEND(?:;[^:]+)?:(.*)/);
+    const locationMatch = block.match(/LOCATION:(.*)/);
+
+    if (dtstartMatch) {
+      const rawStart = dtstartMatch[1].trim();
+      const startDate = parseICSDate(rawStart);
+      const rawEnd = dtendMatch ? dtendMatch[1].trim() : rawStart;
+      const endDate = parseICSDate(rawEnd);
+
+      if (startDate && startDate >= new Date(now.getTime() - 24 * 60 * 60 * 1000)) {
+        events.push({
+          id: `ics-${i}-${startDate.getTime()}`,
+          summary: summaryMatch ? summaryMatch[1].trim().replace(/\\,/g, ",") : "Evento Google Calendar",
+          description: descMatch ? descMatch[1].trim().replace(/\\n/g, "\n") : "",
+          start: startDate.toISOString(),
+          end: endDate ? endDate.toISOString() : startDate.toISOString(),
+          location: locationMatch ? locationMatch[1].trim() : "Google Calendar",
+          status: "confirmed"
+        });
+      }
+    }
+  }
+
+  events.sort((a, b) => new Date(a.start).getTime() - new Date(b.start).getTime());
+  return events.slice(0, maxResults);
+}
 
 /**
  * Check if Google Calendar API key or Client ID is configured
@@ -60,12 +120,27 @@ export async function getUpcomingCalendarEvents(maxResults = 10): Promise<Calend
   const gcalKey = await getApiKey("google_calendar");
 
   if (!gcalKey) {
-    // Return mock events for demonstration when API key isn't configured
     return DEFAULT_MOCK_EVENTS;
   }
 
+  // 1. If gcalKey is an iCal / ICS Private URL (https://calendar.google.com/calendar/ical/...)
+  if (gcalKey.startsWith("http://") || gcalKey.startsWith("https://")) {
+    try {
+      const resIcs = await fetch(gcalKey);
+      if (resIcs.ok) {
+        const icsText = await resIcs.text();
+        const parsedEvents = parseICSEvents(icsText, maxResults);
+        if (parsedEvents.length > 0) {
+          return parsedEvents;
+        }
+      }
+    } catch (err: any) {
+      console.error("[GCal Connector] Error fetching iCal URL:", err.message);
+    }
+  }
+
+  // 2. Direct Google OAuth Access Token or Google API Call
   try {
-    // If gcalKey is an OAuth Access Token or Service Account Key / API Key
     const calendarId = "primary";
     const now = new Date().toISOString();
     const url = `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?timeMin=${encodeURIComponent(now)}&maxResults=${maxResults}&singleEvents=true&orderBy=startTime`;
@@ -92,13 +167,11 @@ export async function getUpcomingCalendarEvents(maxResults = 10): Promise<Calend
         status: item.status || "confirmed"
       }));
     }
-
-    console.warn("[GCal Connector] API call returned non-OK status, falling back to mock events");
-    return DEFAULT_MOCK_EVENTS;
   } catch (err: any) {
-    console.error("[GCal Connector] Error fetching events:", err.message);
-    return DEFAULT_MOCK_EVENTS;
+    console.error("[GCal Connector] Error fetching API events:", err.message);
   }
+
+  return DEFAULT_MOCK_EVENTS;
 }
 
 /**
@@ -128,8 +201,7 @@ export async function createGoogleCalendarEvent(eventData: {
     status: "confirmed"
   };
 
-  if (!gcalKey) {
-    // Add to local mock list in memory/json for demo
+  if (!gcalKey || gcalKey.startsWith("http")) {
     DEFAULT_MOCK_EVENTS.unshift(newEvent);
     return newEvent;
   }
@@ -149,26 +221,26 @@ export async function createGoogleCalendarEvent(eventData: {
         description: eventData.description,
         start: { dateTime: startDate.toISOString() },
         end: { dateTime: endDate.toISOString() },
-        location: eventData.location || "Google Meet",
-        attendees: (eventData.attendees || []).map(email => ({ email }))
+        location: eventData.location,
+        attendees: eventData.attendees?.map(email => ({ email }))
       })
     });
 
     if (res.ok) {
-      const created = await res.json();
+      const data = await res.json();
       return {
-        id: created.id,
-        summary: created.summary,
-        description: created.description,
-        start: created.start?.dateTime || startDate.toISOString(),
-        end: created.end?.dateTime || endDate.toISOString(),
-        location: created.location,
-        htmlLink: created.htmlLink,
+        id: data.id,
+        summary: data.summary,
+        description: data.description,
+        start: data.start?.dateTime || startDate.toISOString(),
+        end: data.end?.dateTime || endDate.toISOString(),
+        location: data.location || "Google Meet",
+        htmlLink: data.htmlLink,
         status: "confirmed"
       };
     }
   } catch (err: any) {
-    console.error("[GCal Connector] Error creating event:", err.message);
+    console.error("[GCal Connector] Error creating API event:", err.message);
   }
 
   DEFAULT_MOCK_EVENTS.unshift(newEvent);

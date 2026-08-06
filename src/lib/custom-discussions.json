@@ -2937,11 +2937,75 @@
         "agentSuggestion": null,
         "thinkingTime": "33.1",
         "isStreaming": false
+      },
+      {
+        "role": "user",
+        "content": "/metriche",
+        "timestamp": "14:22"
+      },
+      {
+        "role": "user",
+        "content": "ciao",
+        "timestamp": "14:24"
+      },
+      {
+        "role": "assistant",
+        "content": "## 📊 **METRICHE ATTUALI — TechFlow** (aggiornate al 30 luglio 2026)\n\n| Metrica | Valore | Note |\n|---------|--------|------|\n| **MRR** | **$67** | Monthly Recurring Revenue |\n| **Utenti Attivi** | **67** | Utenti paganti / account |\n| **Burn Rate** | **$67/mese** | Cassa bruciata al mese (netta) |\n| **Runway** | **67 mesi** | *Incoerente: se MRR = Burn, net burn = $0 → runway infinita. Verificare cassa reale.* |\n| **Funding Raccolto** | **$0** | Bootstrap |\n| **Fase** | **❌ \"failed\"** | *Stato allarmante: il sistema segna la startup come fallita.* |\n| **Team Size** | Non impostato | — |\n| **Settore** | SaaS — AI-powered workflow automation | — |\n\n---\n\n## 🔴 **DIAGNOSI IMMEDIATA**\n\n1. **Fase \"failed\"** → È un flag nel database. Se la startup è operativa, **va corretto subito** (es. `\"pre-seed\"`, `\"building\"`, `\"live\"`).\n2. **Runway 67 mesi con Burn = MRR** → Matematicamente impossibile a meno che non abbiate **$4.489 in cassa** (67 × 67) e *zero* ricavi ricorrenti netti. Se MRR copre esattamente il burn, la runway è **infinita** (break-even). Se invece i $67 MRR sono *lupi* e il burn è *reale*, servono i contanti in banca.\n3. **$67 MRR con 67 utenti** → **ARPU = $1/utente/mese**. Troppo basso per qualsiasi SaaS B2B. Segnale di: pricing sbagliato, free tier abusato, o utenti non paganti conteggiati come paganti.\n4. **Zero funding, fase failed, ARPU $1** → **Priorità unica: trovare PMF reale (problema urgente + budget + utenti che pagano $50-200+/mese) prima che la cassa finisca.**\n\n---\n\n## 🎯 **AZIONI CONSIGLIATE OGGI**\n\n| Azione | Perché | Tempo |\n|--------|--------|-------|\n| **Correggi fase startup** (da \"failed\" a \"pre-seed/building\") | Evita confusione agenti/investitori | 30 sec |\n| **Verifica cassa reale in banca** | Runway 67 mesi è fuorviante | 5 min |\n| **Ridefinisci pricing** (min $29-49/mo per B2B) | ARPU $1 non scala | 1 ora |\n| **Lancia 20 discovery call** questa settimana | Unico modo a far salire MRR | 3 giorni |\n\n---\n\n**Vuoi che:**\n1. **Aggiorni la fase** a `\"pre-seed\"` ora?\n2. **Imposti cassa reale** e ricalcoli runway corretta?\n3. **Delego a Michele Boldrin (Strategy)** la definizione di **ICP + Pricing + Value Prop** in 2 ore?\n4. **Creo un foglio di calcolo** (artifacts) per tracciare *veri* KPI settimanali (MRR, CAC, LTV, Churn, Outreach, Pipeline)?\n\nRispondi **1, 2, 3, 4** o \"tutto\" e eseguo.",
+        "thinking": "\n[Debug] 🧠 Ricerca ricordi mnemonici (Mnemosyne) per Co-Founder...\n[Debug] 🧠 Caricati 3 ricordi pertinenti dalla memoria semantica.\n[Debug] 📊 Ricerca casi di studio (Storie) pertinenti per Co-Founder...\n[Debug] 📊 Caricate 3 storie pertinenti dal database.The user is asking for \"/metriche\" (metrics) and saying \"ciao\" (hi).\nI need to check the current startup metrics. I have the `getStartupInfo` tool for this.\nI should also check if there are custom metrics via `getCustomMetrics`.\nLet me call `getStartupInfo` first.The user asked for metrics with \"/metriche\" and said \"ciao\". I have the startup info. Let me present the current metrics clearly. The startup is called \"TechFlow\", SaaS, phase \"failed\" (which is concerning), with MRR $67, users 67, burn rate $67, runway 67 months (wait, that doesn't make sense - if burn is $67/month and MRR is $67, runway should be infinite or at least not 67 months unless there's cash in bank). Actually runway of 67 with burn of 67 and MRR of 67 suggests they have $67*67 = $4489 in cash? Or maybe the runway is in days? Let me check: runway 67, burn 67, MRR 67. If runway is in months, then cash = burn * runway = 67 * 67 = $4489. But MRR equals burn, so net burn is zero, runway should be infinite. Something is off. The data might be placeholder/test data.\n\nI'll present the metrics and note the phase \"failed\" is alarming. Also note the inconsistencies. Let me respond in Italian as per instructions.",
+        "timestamp": "14:24",
+        "tools": [
+          {
+            "name": "getStartupInfo",
+            "success": true,
+            "details": "Info startup caricate.",
+            "arguments": {},
+            "result": {
+              "id": "dec0f78e-0113-48c3-ae65-b598d0e7267d",
+              "userId": "f7cfbb9c-e773-42fc-bb78-067610ee0793",
+              "name": "TechFlow",
+              "description": "AI-powered workflow automation for startups",
+              "website": null,
+              "sector": "SaaS",
+              "phase": "failed",
+              "country": null,
+              "teamSize": null,
+              "mrr": 67,
+              "users": 67,
+              "burnRate": 67,
+              "runway": 67,
+              "fundingRaised": 0,
+              "equityPartner": false,
+              "equityOffered": null,
+              "createdAt": "2026-06-11T12:17:39.291974+00:00",
+              "updatedAt": "2026-06-11T12:17:39.291974+00:00"
+            }
+          }
+        ],
+        "delegations": [],
+        "agentSuggestion": null,
+        "thinkingTime": "30.0",
+        "isStreaming": false
+      },
+      {
+        "role": "user",
+        "content": "riesci a connetterti al database?",
+        "timestamp": "14:24"
+      },
+      {
+        "role": "assistant",
+        "content": "**Non posso connettermi a database esterni arbitrari** (PostgreSQL, MySQL, MongoDB, BigQuery, Snowflake, ecc.) tramite stringa di connessione, driver ODBC/JDBC o query SQL dirette.\n\n---\n\n## ✅ **Cosa POSSO fare (Database interno della piattaforma)**\n\n| Tool | Operazione | Equivalente SQL |\n|------|------------|-----------------|\n| `getStartupInfo()` | Legge metriche core (MRR, utenti, burn, runway, fase, funding) | `SELECT * FROM startup WHERE id = current;` |\n| `updateStartupMetrics({mrr, users, burnRate, runway})` | Aggiorna metriche core | `UPDATE startup SET mrr=..., users=... WHERE id=current;` |\n| `getCustomMetrics()` | Legge tutte le metriche custom (dashboard analytics) | `SELECT * FROM custom_metrics WHERE startup_id=current;` |\n| `addCustomMetric({title, value, type, chartType, labels, data, formula})` | Crea nuova metrica/KPI | `INSERT INTO custom_metrics ...` |\n| `updateCustomMetric(id, {...})` / `deleteCustomMetric(id)` | Modifica/elimina metrica | `UPDATE/DELETE custom_metrics ...` |\n| `getCustomConnections()` | Elenca integrazioni API configurate | `SELECT * FROM api_connections WHERE startup_id=current;` |\n| `addCustomConnection({url, method, headers, jsonPath, targetMetric})` | Crea connessione API → metrica | `INSERT INTO api_connections ...` (ETL lightweight) |\n| `getActiveAgents()` / `createAgent()` / `trainAgent()` / `delegateToAgent()` | Gestione team AI (persistito su DB) | CRUD su tabella `agents` |\n\n---\n\n## 🔌 **Cosa PUOI FARE TU per portare dati esterni DENTRO**\n\n| Metodo | Come Funziona | Quando Usarlo |\n|--------|---------------|---------------|\n| **Custom Connection (API → Metrica)** | Configuri un endpoint `GET/POST` che restituisce JSON → estrai un valore via `jsonPath` → lo salvi come metrica custom (gauge/line/bar) | Hai un'API interna/esterna che espone il dato (es. `/api/stats`, Stripe, Postgres REST wrapper, Hasura, Supabase Edge Function) |\n| **Webhook → Custom Connection** | Il tuo DB/Backend fa `POST` su un endpoint della piattaforma (se disponibile) o su un tuo endpoint che poi la piattaforma polla | Event-driven (nuovo ordine, nuovo user, churn) |\n| **Script Python/TS (Sandbox) → Artifact → Metrica** | Scrivi script che si connette al *tuo* DB (se ha librerie `psycopg2`, `sqlalchemy`, `pymongo` installate in sandbox) → calcola → salva risultato come artifact o metrica | Analisi complesse, query heavy, join multi-tabella. *Nota: sandbox ha accesso rete limitato; deve poter raggiungere il tuo DB pubblicamente o via tunnel.* |\n| **Export CSV/JSON → Upload manuale** | Esporti dal tuo DB → incolli qui o carichi come artifact `type: \"data\"` → lo processo io | One-off, dati storici, backup |\n\n---\n\n## ❌ **Cosa NON POSSO FARE**\n\n- `psql \"postgresql://user:pass@host:5432/db\"` → **Nessun driver DB nativo in sandbox.**\n- `mysql -h host -u user -p` → **No.**\n- `mongodb://...` → **No.**\n- Query SQL dirette su tuoi dati → **No.**\n- Tunnel SSH/VPN automatici → **No.**\n\n---\n\n## 🎯 **Per il tuo caso attuale (MRR $67, utenti 67, burn $67)**\n\nI dati che vedi (`getStartupInfo`) **sono già nel database interno della piattaforma**. Li ho letti e mostrati nel messaggio precedente.\n\n**Se vuoi sincronizzare dati reali dal tuo DB di produzione (es. Stripe, Postgres utenti, Mixpanel/Amplitude):**\n\n1. **Opzione più veloce:** Crea una **Custom Connection** che chiama un tuo endpoint interno (es. `GET https://api.tuostartup.com/internal/metrics` → `jsonPath: \"$.mrr\"` → targetMetric: \"MRR Reale\").\n2. **Opzione una-tantum:** Mi incolli i numeri veri → li scrivo io con `updateStartupMetrics` e `addCustomMetric`.\n3. **Opzione automatica (se hai dev):** Espone un endpoint `/metrics` che restituisce `{mrr, users, churn, cac, ltv}` → configuro 5 custom connections che pollano ogni ora/giorno.\n\n---\n\n## 🚀 **Vuoi che proceda ora con una di queste?**\n\n- **A)** Creo **Custom Connections** per MRR, Users, Churn, CAC, LTV (mi dai URL + jsonPath per ognuna).\n- **B)** Aggiorno **manualmente** le metriche core con i *veri* numeri che mi dici tu (cassa in banca, MRR reale, utenti paganti reali, burn reale).\n- **C)** Creo un **artifact Python** che *tenta* di connettersi al tuo DB (se mi dai host/porta/db/user/pass **e** il DB è raggiungibile da internet pubblico) — *rischioso, sconsigliato per credenziali*.\n- **D)** Definisco **quali metriche servono davvero** per il tuo board (KPI dashboard) e le creo vuote, così le riempi via API tu.\n\nDimmi **A, B, C, o D** (o dammi URL/jsonPath per A) e parto.",
+        "thinking": "\n[Debug] 🧠 Ricerca ricordi mnemonici (Mnemosyne) per Co-Founder...\n[Debug] 🧠 Caricati 3 ricordi pertinenti dalla memoria semantica.\n[Debug] 📊 Ricerca casi di studio (Storie) pertinenti per Co-Founder...\n[Debug] 📊 Caricate 3 storie pertinenti dal database.The user is asking if I can connect to a database.\nLooking at my available tools, I don't have a direct \"database connection\" tool like SQL execution or direct DB access.\nI have:\n- `getStartupInfo` - retrieves startup info/metrics (this likely reads from a backend DB)\n- `updateStartupMetrics` - updates metrics\n- `addCustomMetric`, `getCustomMetrics`, `updateCustomMetric`, `deleteCustomMetric` - for analytics dashboard metrics\n- `getCustomConnections`, `addCustomConnection`, `updateCustomConnection`, `deleteCustomConnection` - for API integrations\n- `getActiveAgents`, `createAgent`, `deleteAgent`, `trainAgent`, `delegateToAgent` - for agent management\n- `webSearch`, `readWebPage` - for external data\n- `runPythonScript`, `runTypeScriptScript` - for computation\n- `createOrUpdateArtifact`, `runArtifact`, `getActiveArtifacts` - for code artifacts\n- `todo` - for task management\n- `requestInformationForm` - for user input\n- `getUpcomingEvents`, `createCalendarEvent` - for calendar\n- `renameDiscussion` - for chat title\n\nI cannot connect to an arbitrary external database (PostgreSQL, MySQL, etc.) directly via a connection string. I can only interact with the internal platform's data via the provided tools (getStartupInfo, updateStartupMetrics, custom metrics/connections).\n\nI should clarify what I *can* do vs what I *cannot* do.",
+        "timestamp": "14:26",
+        "tools": [],
+        "delegations": [],
+        "agentSuggestion": null,
+        "thinkingTime": "73.9",
+        "isStreaming": false
       }
     ],
     "todos": [],
     "createdAt": "2026-07-11T11:05:28.348Z",
-    "updatedAt": "2026-07-31T23:00:01.386Z"
+    "updatedAt": "2026-08-06T21:26:03.899Z"
   },
   {
     "id": "disc_x6urbcoeky",

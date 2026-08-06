@@ -1094,14 +1094,16 @@ export default function SettingsPage() {
           <div className="rounded-xl overflow-hidden" style={{ border: '1px solid #E8EAED' }}>
             <div className="px-4 py-2.5 flex items-center gap-2" style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
               <span className="w-5 h-5 rounded-full bg-[#1A73E8] text-white text-[10px] font-bold flex items-center justify-center">1</span>
-              <span className="text-xs font-bold" style={{ color: '#202124' }}>Configurazione Google Cloud Console</span>
+              <span className="text-xs font-bold" style={{ color: '#202124' }}>Come collegare il tuo account Google reale</span>
             </div>
             <div className="px-4 py-3 space-y-2 text-[11px]" style={{ color: '#5F6368' }}>
               <p>
-                Crea una credenziale API su <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google Cloud Console ↗</a> abilitando l'API <strong className="text-[#202124]">Google Calendar API</strong>.
+                <strong>Metodo 1 (Consigliato - Immediato):</strong> Copia il tuo <strong>Indirizzo privato in formato iCal</strong> da Google Calendar.
+                <br />
+                <em>Dove trovarlo: Apri <a href="https://calendar.google.com" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google Calendar ↗</a> → Impostazioni calendario → Integrale calendario → Copia <strong>"Indirizzo privato in formato iCal"</strong> (es: <code>https://calendar.google.com/calendar/ical/.../basic.ics</code>).</em>
               </p>
-              <p>
-                Supporta <strong>OAuth 2.0 Access Token</strong> o <strong>Service Account Key JSON</strong>.
+              <p className="pt-1">
+                <strong>Metodo 2 (Avanzato):</strong> Inserisci il tuo <strong>OAuth 2.0 Access Token</strong> (<code>ya29...</code>) o Service Account Key da <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" className="text-[#1A73E8] font-semibold hover:underline">Google Cloud Console ↗</a>.
               </p>
             </div>
           </div>
@@ -1111,7 +1113,7 @@ export default function SettingsPage() {
             <div className="px-4 py-2.5 flex items-center justify-between" style={{ background: '#F8F9FA', borderBottom: '1px solid #E8EAED' }}>
               <div className="flex items-center gap-2">
                 <span className="w-5 h-5 rounded-full bg-[#1A73E8] text-white text-[10px] font-bold flex items-center justify-center">2</span>
-                <span className="text-xs font-bold" style={{ color: '#202124' }}>Inserisci il Token API / OAuth Key</span>
+                <span className="text-xs font-bold" style={{ color: '#202124' }}>Incolla Link iCal Privato o Token OAuth</span>
               </div>
               {gcalConfigured && (
                 <span className="flex items-center gap-1 text-[10px] font-semibold text-[#137333]">
@@ -1125,7 +1127,7 @@ export default function SettingsPage() {
                   type={showGcalPassword ? 'text' : 'password'}
                   value={gcalKeyInput}
                   onChange={e => setGcalKeyInput(e.target.value)}
-                  placeholder="ya29.a0Axxxxxxxxxxxxxxxx  oppure  Service Account Private Key"
+                  placeholder="https://calendar.google.com/calendar/ical/.../basic.ics   oppure   OAuth Token (ya29...)"
                   className="w-full px-3.5 py-3 pr-10 rounded-lg text-xs focus:outline-none font-mono transition-all"
                   style={{
                     background: gcalConfigured ? '#F6FEF8' : '#F8F9FA',

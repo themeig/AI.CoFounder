@@ -1,6 +1,151 @@
 {
   "briefings": [
     {
+      "id": "briefing-1786051733996",
+      "date": "2026-08-06",
+      "timestamp": "2026-08-06T21:28:53.996Z",
+      "cofounderIntro": "Buongiorno team! Diamo il via allo standup giornaliero per TechFlow. Ciascun dipendente presenti le priorità di oggi.",
+      "employeeUpdates": [
+        {
+          "agentId": "c0639411-64da-4fb1-9b18-a561a876d3ee",
+          "agentType": "legal",
+          "agentName": "Legal Agent",
+          "roleTitle": "LEGAL Lead",
+          "avatarIcon": "📊",
+          "avatarBg": "#E8F0FE",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di legal. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione legal attiva",
+            "Monitoraggio KPI"
+          ]
+        },
+        {
+          "agentId": "b3645b08-7fff-4172-8a4e-4189ae889f98",
+          "agentType": "operations",
+          "agentName": "Operations Agent",
+          "roleTitle": "OPERATIONS Lead",
+          "avatarIcon": "📊",
+          "avatarBg": "#E8F0FE",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di operations. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione operations attiva",
+            "Monitoraggio KPI"
+          ]
+        },
+        {
+          "agentId": "57a58528-c6b0-4c14-921d-227a19707c29",
+          "agentType": "custom",
+          "agentName": "Dr.ssa Sofia Marchetti",
+          "roleTitle": "CUSTOM Lead",
+          "avatarIcon": "📊",
+          "avatarBg": "#E8F0FE",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di custom. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione custom attiva",
+            "Monitoraggio KPI"
+          ]
+        },
+        {
+          "agentId": "30f72911-dd3a-408d-8fd2-c139fc3de3bd",
+          "agentType": "custom",
+          "agentName": "maggi",
+          "roleTitle": "CUSTOM Lead",
+          "avatarIcon": "📊",
+          "avatarBg": "#E8F0FE",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di custom. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione custom attiva",
+            "Monitoraggio KPI"
+          ]
+        },
+        {
+          "agentId": "c7464ff0-7a34-4bf3-9752-c8e95cf31a33",
+          "agentType": "finance",
+          "agentName": "cryptoBro",
+          "roleTitle": "FINANCE Lead",
+          "avatarIcon": "💶",
+          "avatarBg": "#FEF7E0",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di finance. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione finance attiva",
+            "Monitoraggio KPI"
+          ]
+        },
+        {
+          "agentId": "a0bd13d5-17d9-4574-aee1-77657fad1c8d",
+          "agentType": "strategy",
+          "agentName": "Strategy Agent",
+          "roleTitle": "STRATEGY Lead",
+          "avatarIcon": "📊",
+          "avatarBg": "#E8F0FE",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di strategy. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione strategy attiva",
+            "Monitoraggio KPI"
+          ]
+        },
+        {
+          "agentId": "a9fb73ae-cc0f-4767-83b0-3b532197b63a",
+          "agentType": "marketing",
+          "agentName": "Marketing Agent",
+          "roleTitle": "MARKETING Lead",
+          "avatarIcon": "🚀",
+          "avatarBg": "#E8F0FE",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di marketing. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione marketing attiva",
+            "Monitoraggio KPI"
+          ]
+        },
+        {
+          "agentId": "95a623aa-10a9-489f-b769-a7ee6224d50b",
+          "agentType": "strategy",
+          "agentName": "Michele Boldrin",
+          "roleTitle": "STRATEGY Lead",
+          "avatarIcon": "📊",
+          "avatarBg": "#E8F0FE",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di strategy. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione strategy attiva",
+            "Monitoraggio KPI"
+          ]
+        },
+        {
+          "agentId": "b471755b-7516-430f-a9fd-ddc093aad33c",
+          "agentType": "tech",
+          "agentName": "Tech Agent",
+          "roleTitle": "TECH Lead",
+          "avatarIcon": "💻",
+          "avatarBg": "#E6F4EA",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di tech. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione tech attiva",
+            "Monitoraggio KPI"
+          ]
+        },
+        {
+          "agentId": "956958b6-7b6a-4d19-a9c2-5a4ee401fa9f",
+          "agentType": "cofounder",
+          "agentName": "coFounder",
+          "roleTitle": "COFOUNDER Lead",
+          "avatarIcon": "📊",
+          "avatarBg": "#E8F0FE",
+          "message": "Stiamo lavorando all'ottimizzazione dei processi di cofounder. Le metriche principali mostrano stabilità ed efficienza.",
+          "keyPoints": [
+            "Integrazione cofounder attiva",
+            "Monitoraggio KPI"
+          ]
+        }
+      ],
+      "cofounderSummary": "La riunione si conclude con un bilancio positivo. Il team è allineato sugli obiettivi.",
+      "actionItems": [
+        "Verificare le KPI di crescita nel modulo Metriche",
+        "Consolidare le comunicazioni con il team AI",
+        "Revisionare la roadmap di prodotto Q3"
+      ],
+      "read": false
+    },
+    {
       "id": "briefing-1785454513185",
       "date": "2026-07-30",
       "timestamp": "2026-07-30T23:35:13.185Z",
