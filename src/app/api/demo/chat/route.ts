@@ -12,6 +12,7 @@ const DEFAULT_MODEL = "openrouter/free";
 const METRICS_FILE_PATH = path.join(process.cwd(), "src/lib/custom-metrics.json");
 
 import { supabaseFetch, SUPABASE_URL, SUPABASE_SERVICE_KEY } from "@/lib/supabase-demo";
+import { getActiveStartupContext } from "../startups/route";
 
 function findModel(modelId: string) {
   return AVAILABLE_MODELS.find(m => m.id === modelId);
@@ -332,28 +333,10 @@ async function getOrCreateDemoEntities(agentType: string) {
     userId = newUser[0].id;
   }
 
-  // 2. Get or create Startup
-  let startups = await supabaseFetch(`/Startup?userId=eq.${userId}&select=*`);
-  let startup;
-  if (startups && startups.length > 0) {
-    startup = startups[0];
-  } else {
-    const newStartup = await supabaseFetch(`/Startup`, {
-      method: "POST",
-      body: JSON.stringify({
-        userId: userId,
-        name: "TechFlow",
-        description: "AI-powered workflow automation for startups",
-        sector: "saas",
-        phase: "pre-seed",
-        mrr: 1200,
-        users: 150,
-        burnRate: 800,
-        runway: 18,
-      }),
-    });
-    startup = newStartup[0];
-  }
+  // 2. Get active Startup with strict portfolio isolation
+  const activeCtx = getActiveStartupContext(req);
+  const dbStartups = await supabaseFetch(`/Startup?id=eq.${activeCtx.id}&select=*`);
+  let startup = dbStartups && Array.isArray(dbStartups) && dbStartups.length > 0 ? dbStartups[0] : activeCtx;
 
   // 3. Get or create AgentConfig
   let agentConfigs = await supabaseFetch(`/AgentConfig?startupId=eq.${startup.id}&type=eq.${agentType}&select=*`);

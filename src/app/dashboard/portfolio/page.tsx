@@ -76,6 +76,7 @@ export default function PortfolioPage() {
 
   const handleMakeActive = async (id: string) => {
     try {
+      document.cookie = `active_startup_id=${encodeURIComponent(id)}; path=/; max-age=31536000`;
       const res = await fetch("/api/demo/startups", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getActiveStartupContext } from "../../startups/route";
 import { promises as fs } from "fs";
 import * as path from "path";
 import { getApiKey } from "@/lib/secure-store";
@@ -203,22 +204,10 @@ export async function POST(req: Request) {
         }
         let currentTodos = todos;
 
-        // Load startup
-        const users = await supabaseFetch(`/User?email=eq.demo@agentfoundry.ai&select=id`);
-        if (!users?.length) {
-          push("error", "Utente demo non trovato");
-          closed = true;
-          try { controller.close(); } catch {}
-          return;
-        }
-        const startups = await supabaseFetch(`/Startup?userId=eq.${users[0].id}&select=*`);
-        if (!startups?.length) {
-          push("error", "Startup demo non trovata");
-          closed = true;
-          try { controller.close(); } catch {}
-          return;
-        }
-        const startup = startups[0];
+        // Load active startup with strict portfolio isolation
+        const activeCtx = getActiveStartupContext(req);
+        const dbStartups = await supabaseFetch(`/Startup?id=eq.${activeCtx.id}&select=*`);
+        const startup = dbStartups && Array.isArray(dbStartups) && dbStartups.length > 0 ? dbStartups[0] : activeCtx;
         const startupId = startup.id;
 
         // Load or create cofounder AgentConfig

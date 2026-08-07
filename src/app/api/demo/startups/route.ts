@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 // Portfolio in-memory fallback list if Supabase has single entry
-let portfolioStartups: any[] = [
+export let portfolioStartups: any[] = [
   {
     id: "dec0f78e-0113-48c3-ae65-b598d0e7267d",
     name: "TechFlow",
@@ -47,7 +47,22 @@ let portfolioStartups: any[] = [
   }
 ];
 
-let activeStartupId = "dec0f78e-0113-48c3-ae65-b598d0e7267d";
+export let activeStartupId = "dec0f78e-0113-48c3-ae65-b598d0e7267d";
+
+export function getActiveStartupContext(req?: Request) {
+  if (req) {
+    try {
+      const cookieHeader = req.headers.get("cookie") || "";
+      const match = cookieHeader.match(/active_startup_id=([^;]+)/);
+      if (match && match[1]) {
+        const cookieId = decodeURIComponent(match[1]);
+        const found = portfolioStartups.find(s => s.id === cookieId);
+        if (found) return found;
+      }
+    } catch {}
+  }
+  return portfolioStartups.find(s => s.id === activeStartupId) || portfolioStartups[0];
+}
 
 export async function GET() {
   try {

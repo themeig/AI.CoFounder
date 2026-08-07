@@ -1,18 +1,20 @@
 import { NextResponse } from "next/server";
 import { supabaseFetch, updateFallbackStartup } from "@/lib/supabase-demo";
+import { getActiveStartupContext } from "../startups/route";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const activeCtx = getActiveStartupContext(req);
     const users = await supabaseFetch("/User?email=eq.demo@agentfoundry.ai&select=id");
     const userId = users && Array.isArray(users) && users.length > 0 ? users[0].id : "demo-user-id";
 
-    const startups = await supabaseFetch(`/Startup?userId=eq.${userId}&select=*`);
-    const startup = startups && Array.isArray(startups) && startups.length > 0
-      ? startups[0]
-      : updateFallbackStartup({});
+    const dbStartups = await supabaseFetch(`/Startup?id=eq.${activeCtx.id}&select=*`);
+    const startup = dbStartups && Array.isArray(dbStartups) && dbStartups.length > 0
+      ? dbStartups[0]
+      : activeCtx;
 
     const startupId = startup.id || "demo-startup-id";
     const agents = await supabaseFetch(`/AgentConfig?startupId=eq.${startupId}&select=id,type,name,isActive,settings`);
