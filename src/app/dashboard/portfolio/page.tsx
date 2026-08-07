@@ -91,6 +91,21 @@ export default function PortfolioPage() {
     }
   };
 
+  const handleOpenWorkspace = async (id: string) => {
+    try {
+      document.cookie = `active_startup_id=${encodeURIComponent(id)}; path=/; max-age=31536000`;
+      await fetch("/api/demo/startups", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, makeActive: true })
+      });
+      window.dispatchEvent(new Event("startup-metrics-updated"));
+      window.location.href = "/dashboard";
+    } catch (err) {
+      console.error("Error opening workspace:", err);
+    }
+  };
+
   const handleSaveStartup = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting) return;
@@ -372,18 +387,13 @@ export default function PortfolioPage() {
 
                   {/* Actions */}
                   <div className="pt-3 border-t border-[#E8EAED] flex items-center justify-between gap-2">
-                    {!isActiveWorkspace ? (
-                      <button
-                        onClick={() => handleMakeActive(s.id)}
-                        className="flex-1 px-3 py-1.5 text-xs font-bold rounded-lg bg-[#E8F0FE] text-[#1A73E8] hover:bg-[#D2E3FC] transition text-center"
-                      >
-                        ⚡ Seleziona Attiva
-                      </button>
-                    ) : (
-                      <span className="text-xs text-[#34A853] font-bold flex items-center gap-1">
-                        <span>✓ Workspace Attivo</span>
-                      </span>
-                    )}
+                    <button
+                      onClick={() => handleOpenWorkspace(s.id)}
+                      className="flex-1 px-3.5 py-2 text-xs font-bold rounded-xl bg-[#1A73E8] text-white hover:bg-[#1557B0] transition text-center shadow-xs flex items-center justify-center gap-1.5"
+                    >
+                      <span>🚀 Apri Workspace</span>
+                      <span>→</span>
+                    </button>
 
                     <div className="flex items-center gap-1">
                       <button

@@ -150,13 +150,13 @@ export async function recall(
   const targetConfig = configs[0];
   const startupId = targetConfig.startupId;
 
-  // 2. Fetch all AgentConfigs in the same startup
-  const allConfigs = await supabaseFetch(`/AgentConfig?startupId=eq.${startupId}&select=id,type,settings`);
+  // 2. Fetch all AgentConfigs (for active startup AND cross-startup global memories)
+  const allConfigs = await supabaseFetch(`/AgentConfig?select=id,type,startupId,settings`);
   if (!allConfigs || allConfigs.length === 0) return [];
 
   const candidates: MemoryEntry[] = [];
 
-  // 3. Gather candidate memory entries
+  // 3. Gather candidate memory entries (Startup-isolated + Shared Global Founder Memories)
   for (const config of allConfigs) {
     let settings = config.settings || {};
     if (typeof settings === 'string') {
@@ -169,11 +169,11 @@ export async function recall(
     const mnemosyne = settings.mnemosyne || [];
     if (Array.isArray(mnemosyne)) {
       for (const entry of mnemosyne) {
-        if (config.id === agentConfigId) {
-          // Retrieve both local and global memories for the active agent
+        if (config.startupId === startupId) {
+          // Startup-specific isolated memory
           candidates.push(entry);
         } else if (entry.scope === 'global') {
-          // Retrieve only global memories for other agents
+          // Cross-startup shared founder memory
           candidates.push(entry);
         }
       }

@@ -21,7 +21,7 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      window.location.href = "/dashboard";
+      window.location.href = "/dashboard/portfolio";
     } catch (err: any) {
       setError("Errore di rete: " + (err?.message || "sconosciuto"));
       setLoading(false);
