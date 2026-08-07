@@ -182,6 +182,17 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
 
   if (!demoUser) return null;
 
+  // Hide left sidebar completely on Portfolio Selection Gateway (/dashboard/portfolio)
+  if (pathname === "/dashboard/portfolio") {
+    return (
+      <div className="min-h-screen bg-[#F8F9FA]">
+        <main className="min-h-screen">
+          {children}
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex" style={{ background: "#F8F9FA" }}>
       {/* ── Left Sidebar Wrapper ─────────────────────────── */}
