@@ -77,19 +77,14 @@ export async function PUT(req: Request) {
     updateFallbackStartup(updatePayload);
 
     // Update in Supabase
-    const usersList = await supabaseFetch("/User?email=eq.demo@agentfoundry.ai&select=id");
-    const userId = usersList && Array.isArray(usersList) && usersList.length > 0 ? usersList[0].id : null;
-
+    const activeCtx = await getActiveStartupContext(req);
+    
     let updated = null;
-    if (userId) {
-      const startups = await supabaseFetch(`/Startup?userId=eq.${userId}&select=*`);
-      if (startups && startups.length > 0) {
-        const startupId = startups[0].id;
-        updated = await supabaseFetch(`/Startup?id=eq.${startupId}`, {
-          method: "PATCH",
-          body: JSON.stringify(updatePayload),
-        });
-      }
+    if (activeCtx && activeCtx.id) {
+      updated = await supabaseFetch(`/Startup?id=eq.${activeCtx.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(updatePayload),
+      });
     }
 
     return NextResponse.json({

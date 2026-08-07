@@ -1197,7 +1197,7 @@ export default function AgentsPage() {
     }
   }, []);
 
-  useEffect(() => {
+  const loadAgentsList = () => {
     const params = new URLSearchParams(window.location.search);
     const agentParamId = params.get('id');
 
@@ -1209,9 +1209,32 @@ export default function AgentsPage() {
         if (list.length > 0) {
           const target = list.find((a: any) => a.id === agentParamId);
           setSelectedAgent(target ? target.id : null);
+        } else {
+          setSelectedAgent(null);
         }
       })
       .catch(console.error);
+  };
+
+  useEffect(() => {
+    loadAgentsList();
+  }, []);
+
+  // ── Per-Startup Isolation: reload agents list on startup switch ──
+  useEffect(() => {
+    const handleStartupSwitch = () => {
+      // Reset all agent state
+      setAgentChats({});
+      setSelectedAgent(null);
+      setArtifacts([]);
+      setActiveArtifact(null);
+      setShowWorkspace(false);
+      setMessages([]);
+      // Reload agents for the new active startup
+      loadAgentsList();
+    };
+    window.addEventListener('startup-metrics-updated', handleStartupSwitch);
+    return () => window.removeEventListener('startup-metrics-updated', handleStartupSwitch);
   }, []);
 
   useEffect(() => {

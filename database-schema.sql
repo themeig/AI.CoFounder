@@ -64,6 +64,19 @@ CREATE TABLE IF NOT EXISTS "Message" (
     CONSTRAINT "Message_pkey" PRIMARY KEY ("id")
 );
 
+-- DISCUSSION (CoFounder Chat Sessions, isolated per-Startup)
+CREATE TABLE IF NOT EXISTS "Discussion" (
+    "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text,
+    "startupId" TEXT NOT NULL,
+    "title" TEXT NOT NULL DEFAULT 'Nuova Conversazione',
+    "messages" JSONB NOT NULL DEFAULT '[]'::jsonb,
+    "todos" JSONB NOT NULL DEFAULT '[]'::jsonb,
+    "createdAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT "Discussion_pkey" PRIMARY KEY ("id"),
+    CONSTRAINT "Discussion_startupId_fkey" FOREIGN KEY ("startupId") REFERENCES "Startup"("id") ON DELETE CASCADE
+);
+
 -- MEMORY ENGINE
 CREATE TABLE IF NOT EXISTS "Interaction" (
     "id" TEXT NOT NULL DEFAULT gen_random_uuid()::text, "startupId" TEXT NOT NULL,
@@ -131,6 +144,7 @@ CREATE INDEX IF NOT EXISTS "Pattern_sector_phase_idx" ON "Pattern"("sector", "ph
 CREATE INDEX IF NOT EXISTS "Pattern_confidence_idx" ON "Pattern"("confidence");
 CREATE INDEX IF NOT EXISTS "Message_agentId_createdAt_idx" ON "Message"("agentId", "createdAt");
 CREATE INDEX IF NOT EXISTS "Recommendation_startupId_isRead_idx" ON "Recommendation"("startupId", "isRead");
+CREATE INDEX IF NOT EXISTS "Discussion_startupId_updatedAt_idx" ON "Discussion"("startupId", "updatedAt");
 
 -- RLS
 ALTER TABLE "User" ENABLE ROW LEVEL SECURITY;
@@ -144,6 +158,7 @@ ALTER TABLE "Outcome" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Recommendation" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Pattern" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Playbook" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Discussion" ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY "Allow all" ON "User" FOR ALL USING (true);
 CREATE POLICY "Allow all" ON "Account" FOR ALL USING (true);
@@ -156,6 +171,7 @@ CREATE POLICY "Allow all" ON "Outcome" FOR ALL USING (true);
 CREATE POLICY "Allow all" ON "Recommendation" FOR ALL USING (true);
 CREATE POLICY "Allow all" ON "Pattern" FOR ALL USING (true);
 CREATE POLICY "Allow all" ON "Playbook" FOR ALL USING (true);
+CREATE POLICY "Allow all" ON "Discussion" FOR ALL USING (true);
 
 -- GRANTS
 GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;

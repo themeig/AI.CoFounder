@@ -3,6 +3,7 @@ import * as path from "path";
 
 export interface Discussion {
   id: string;
+  startupId?: string;
   title: string;
   messages: any[];
   todos?: any[];
@@ -12,10 +13,14 @@ export interface Discussion {
 
 const DISCUSSIONS_FILE_PATH = path.join(process.cwd(), "src/lib/custom-discussions.json");
 
-export async function getDiscussions(): Promise<Discussion[]> {
+export async function getDiscussions(startupId?: string): Promise<Discussion[]> {
   try {
     const data = await fs.readFile(DISCUSSIONS_FILE_PATH, "utf-8");
-    return JSON.parse(data);
+    const all: Discussion[] = JSON.parse(data);
+    if (startupId) {
+      return all.filter(d => d.startupId === startupId || !d.startupId);
+    }
+    return all;
   } catch {
     return [];
   }

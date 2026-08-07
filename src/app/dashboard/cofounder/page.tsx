@@ -1053,6 +1053,13 @@ export default function CoFounderPage() {
   const [slashFilter, setSlashFilter] = useState('');
   const [startupInfo, setStartupInfo] = useState<any>(null);
 
+  // ── Per-Startup Isolation: track active startup ID from cookie ──
+  const getActiveStartupIdFromCookie = () => {
+    const match = document.cookie.match(/active_startup_id=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : 'default';
+  };
+  const [currentStartupId, setCurrentStartupId] = useState<string>('');
+
   // Track active discussion ID in a ref to keep stream completion callbacks aligned
   const activeDiscussionIdRef = useRef(activeDiscussionId);
   useEffect(() => {
@@ -1437,16 +1444,18 @@ export default function CoFounderPage() {
         setDiscussions(list);
         
         if (list.length > 0) {
+          const startupId = getActiveStartupIdFromCookie();
+          const lsKey = `agentfoundry_active_discussion_id_${startupId}`;
           let selectedId = activeIdToSelect;
           if (!selectedId) {
-            selectedId = localStorage.getItem('agentfoundry_active_discussion_id') || undefined;
+            selectedId = localStorage.getItem(lsKey) || undefined;
           }
           if (!selectedId || !list.some(d => d.id === selectedId)) {
             selectedId = list[0].id;
           }
           
           setActiveDiscussionId(selectedId);
-          localStorage.setItem('agentfoundry_active_discussion_id', selectedId);
+          localStorage.setItem(lsKey, selectedId);
         } else {
           handleCreateNewDiscussion();
         }
@@ -1469,8 +1478,9 @@ export default function CoFounderPage() {
     }));
 
     // Switch
+    const startupId = getActiveStartupIdFromCookie();
     setActiveDiscussionId(id);
-    localStorage.setItem('agentfoundry_active_discussion_id', id);
+    localStorage.setItem(`agentfoundry_active_discussion_id_${startupId}`, id);
 
     // Clear workspace state for the new active discussion while loading
     setArtifacts([]);
@@ -1589,8 +1599,17 @@ export default function CoFounderPage() {
     }
   };
 
-  // Load startup info and discussions
+  // ── Per-Startup Isolation: detect startup changes and reload ──
   useEffect(() => {
+    const startupId = getActiveStartupIdFromCookie();
+    setCurrentStartupId(startupId);
+  }, []);
+
+  // Reload everything when currentStartupId changes
+  useEffect(() => {
+    if (!currentStartupId) return;
+
+    // Reload startup info
     fetch('/api/demo/startup')
       .then(res => res.json())
       .then(data => {
@@ -1600,8 +1619,25 @@ export default function CoFounderPage() {
       })
       .catch(console.error);
 
+    // Reset discussions state and reload for new startup
+    setDiscussions([]);
+    setActiveDiscussionId(null);
+    setCofounderInput('');
+    setArtifacts([]);
     fetchDiscussions();
-  }, []);
+  }, [currentStartupId]);
+
+  // Listen for startup-metrics-updated event (fired by portfolio page on startup switch)
+  useEffect(() => {
+    const handleStartupSwitch = () => {
+      const newId = getActiveStartupIdFromCookie();
+      if (newId !== currentStartupId) {
+        setCurrentStartupId(newId);
+      }
+    };
+    window.addEventListener('startup-metrics-updated', handleStartupSwitch);
+    return () => window.removeEventListener('startup-metrics-updated', handleStartupSwitch);
+  }, [currentStartupId]);
 
   // Scroll to bottom only if user was already at the bottom
   useEffect(() => {
