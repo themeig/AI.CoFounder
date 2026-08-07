@@ -4,7 +4,7 @@ import { supabaseFetch, updateFallbackStartup, fallbackStartup } from "@/lib/sup
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Portfolio in-memory fallback list if Supabase has single entry
+// Portfolio in-memory fallback list if Supabase is offline
 export let portfolioStartups: any[] = [
   {
     id: "dec0f78e-0113-48c3-ae65-b598d0e7267d",
@@ -49,23 +49,40 @@ export let portfolioStartups: any[] = [
 
 export let activeStartupId = "dec0f78e-0113-48c3-ae65-b598d0e7267d";
 
-export function getActiveStartupContext(req?: Request) {
+export async function getActiveStartupContext(req?: Request) {
+  let targetId = activeStartupId;
   if (req) {
     try {
       const cookieHeader = req.headers.get("cookie") || "";
       const match = cookieHeader.match(/active_startup_id=([^;]+)/);
       if (match && match[1]) {
-        const cookieId = decodeURIComponent(match[1]);
-        const found = portfolioStartups.find(s => s.id === cookieId);
-        if (found) return found;
+        targetId = decodeURIComponent(match[1]);
       }
     } catch {}
   }
-  return portfolioStartups.find(s => s.id === activeStartupId) || portfolioStartups[0];
+
+  // 1. Check in-memory portfolio list
+  const foundLocal = portfolioStartups.find(s => s.id === targetId);
+  if (foundLocal) return foundLocal;
+
+  // 2. Fetch directly from Supabase DB by targetId
+  try {
+    const dbRes = await supabaseFetch(`/Startup?id=eq.${targetId}&select=*`);
+    if (dbRes && Array.isArray(dbRes) && dbRes.length > 0) {
+      const dbStartup = dbRes[0];
+      portfolioStartups.unshift(dbStartup);
+      return dbStartup;
+    }
+  } catch {}
+
+  return portfolioStartups[0];
 }
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
+    const activeCtx = getActiveStartupContext(req);
+    activeStartupId = activeCtx.id;
+
     const users = await supabaseFetch("/User?email=eq.demo@agentfoundry.ai&select=id");
     const userId = users && Array.isArray(users) && users.length > 0 ? users[0].id : "demo-user-id";
 
@@ -73,15 +90,15 @@ export async function GET() {
     
     let startupsList = portfolioStartups;
     if (dbStartups && Array.isArray(dbStartups) && dbStartups.length > 0) {
-      // Merge db startups with sold/failed portfolio mocks if db only has 1
+      // Sync DB startups with in-memory portfolio list
       const dbIds = new Set(dbStartups.map(s => s.id));
       startupsList = [
         ...dbStartups,
         ...portfolioStartups.filter(p => !dbIds.has(p.id))
       ];
+      portfolioStartups = startupsList;
     }
 
-    // Ensure active startup matches fallbackStartup in memory
     const mainStartup = startupsList.find(s => s.id === activeStartupId) || startupsList[0];
     if (mainStartup) {
       updateFallbackStartup({
@@ -139,7 +156,7 @@ export async function GET() {
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { name, sector, phase, mrr, users, burnRate, runway, description, exitValuation } = body;
+    const { name, sector, phase, mrr, users, burnRate, runway, description, exitValuation, makeActive } = body;
 
     if (!name) {
       return NextResponse.json({ error: "Il nome della startup è obbligatorio." }, { status: 400 });
@@ -148,8 +165,8 @@ export async function POST(req: Request) {
     const usersList = await supabaseFetch("/User?email=eq.demo@agentfoundry.ai&select=id");
     const userId = usersList && Array.isArray(usersList) && usersList.length > 0 ? usersList[0].id : "demo-user-id";
 
-    const newStartup: any = {
-      id: "startup-" + Date.now(),
+    // Clean payload for Supabase REST API (only valid columns)
+    const dbPayload: any = {
       userId,
       name,
       description: description || "Nuova startup nel portfolio founder",
@@ -159,35 +176,47 @@ export async function POST(req: Request) {
       users: Number(users) || 0,
       burnRate: Number(burnRate) || 0,
       runway: Number(runway) || 12,
+    };
+
+    const newStartupItem: any = {
+      ...dbPayload,
+      id: "startup-" + Date.now(),
       exitValuation: Number(exitValuation) || 0,
       createdAt: new Date().toISOString()
     };
 
-    // Save to DB
+    // 1. Save to Supabase DB
     try {
       const dbResult = await supabaseFetch("/Startup", {
         method: "POST",
-        body: JSON.stringify(newStartup)
+        body: JSON.stringify(dbPayload)
       });
       if (dbResult && Array.isArray(dbResult) && dbResult.length > 0) {
-        newStartup.id = dbResult[0].id;
+        newStartupItem.id = dbResult[0].id;
       }
     } catch (err: any) {
       console.warn("[Startups POST DB Warning]:", err?.message);
     }
 
-    portfolioStartups.unshift(newStartup);
+    portfolioStartups.unshift(newStartupItem);
 
-    if (body.makeActive) {
-      activeStartupId = newStartup.id;
-      updateFallbackStartup(newStartup);
+    if (makeActive) {
+      activeStartupId = newStartupItem.id;
+      updateFallbackStartup(newStartupItem);
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
-      message: `✓ Startup '${name}' creata con successo!`,
-      startup: newStartup
+      message: `✓ Startup '${name}' creata con successo in Supabase!`,
+      startup: newStartupItem,
+      activeStartupId
     });
+
+    if (makeActive) {
+      res.cookies.set("active_startup_id", newStartupItem.id, { path: "/", maxAge: 31536000 });
+    }
+
+    return res;
   } catch (err: any) {
     console.error("[Startups POST Error]:", err?.message || err);
     return NextResponse.json({ error: err?.message || "Impossibile creare la startup." }, { status: 500 });
@@ -216,20 +245,22 @@ export async function PATCH(req: Request) {
       if (exitValuation !== undefined) portfolioStartups[targetIdx].exitValuation = Number(exitValuation);
     }
 
-    // Try DB update
+    // Clean payload for Supabase DB
+    const dbUpdatePayload: any = {
+      ...(name && { name }),
+      ...(sector && { sector }),
+      ...(phase && { phase }),
+      ...(mrr !== undefined && { mrr: Number(mrr) }),
+      ...(users !== undefined && { users: Number(users) }),
+      ...(burnRate !== undefined && { burnRate: Number(burnRate) }),
+      ...(runway !== undefined && { runway: Number(runway) }),
+      ...(description !== undefined && { description }),
+    };
+
     try {
       await supabaseFetch(`/Startup?id=eq.${id}`, {
         method: "PATCH",
-        body: JSON.stringify({
-          ...(name && { name }),
-          ...(sector && { sector }),
-          ...(phase && { phase }),
-          ...(mrr !== undefined && { mrr: Number(mrr) }),
-          ...(users !== undefined && { users: Number(users) }),
-          ...(burnRate !== undefined && { burnRate: Number(burnRate) }),
-          ...(runway !== undefined && { runway: Number(runway) }),
-          ...(description !== undefined && { description }),
-        })
+        body: JSON.stringify(dbUpdatePayload)
       });
     } catch {}
 
@@ -239,11 +270,17 @@ export async function PATCH(req: Request) {
       if (activeObj) updateFallbackStartup(activeObj);
     }
 
-    return NextResponse.json({
+    const res = NextResponse.json({
       success: true,
       message: `✓ Startup aggiornata con successo!`,
       activeStartupId
     });
+
+    if (makeActive) {
+      res.cookies.set("active_startup_id", id, { path: "/", maxAge: 31536000 });
+    }
+
+    return res;
   } catch (err: any) {
     console.error("[Startups PATCH Error]:", err?.message || err);
     return NextResponse.json({ error: err?.message || "Impossibile aggiornare la startup." }, { status: 500 });

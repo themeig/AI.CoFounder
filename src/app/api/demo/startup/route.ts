@@ -7,7 +7,7 @@ export const revalidate = 0;
 
 export async function GET(req: Request) {
   try {
-    const activeCtx = getActiveStartupContext(req);
+    const activeCtx = await getActiveStartupContext(req);
     const users = await supabaseFetch("/User?email=eq.demo@agentfoundry.ai&select=id");
     const userId = users && Array.isArray(users) && users.length > 0 ? users[0].id : "demo-user-id";
 

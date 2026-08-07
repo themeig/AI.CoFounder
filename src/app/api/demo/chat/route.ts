@@ -334,7 +334,7 @@ async function getOrCreateDemoEntities(agentType: string) {
   }
 
   // 2. Get active Startup with strict portfolio isolation
-  const activeCtx = getActiveStartupContext(req);
+  const activeCtx = await getActiveStartupContext(req);
   const dbStartups = await supabaseFetch(`/Startup?id=eq.${activeCtx.id}&select=*`);
   let startup = dbStartups && Array.isArray(dbStartups) && dbStartups.length > 0 ? dbStartups[0] : activeCtx;
 

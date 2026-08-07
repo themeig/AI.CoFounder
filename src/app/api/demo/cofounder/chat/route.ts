@@ -205,7 +205,7 @@ export async function POST(req: Request) {
         let currentTodos = todos;
 
         // Load active startup with strict portfolio isolation
-        const activeCtx = getActiveStartupContext(req);
+        const activeCtx = await getActiveStartupContext(req);
         const dbStartups = await supabaseFetch(`/Startup?id=eq.${activeCtx.id}&select=*`);
         const startup = dbStartups && Array.isArray(dbStartups) && dbStartups.length > 0 ? dbStartups[0] : activeCtx;
         const startupId = startup.id;
