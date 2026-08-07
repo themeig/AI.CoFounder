@@ -48,6 +48,16 @@ const navItemsDef = [
     ),
   },
   {
+    href: "/dashboard/portfolio",
+    key: "portfolio",
+    defaultLabel: "Portfolio",
+    icon: (
+      <svg viewBox="0 0 24 24" fill="currentColor" className="w-5 h-5">
+        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+      </svg>
+    ),
+  },
+  {
     href: "/dashboard/stakeholders",
     key: "stakeholders",
     defaultLabel: "Stakeholders",
@@ -353,33 +363,46 @@ function DashboardContent({ children }: { children: React.ReactNode }) {
               </div>
             </div>
 
-            <button
-              onClick={() => {
-                document.cookie = "demo_user_id=; max-age=0; path=/";
-                document.cookie = "demo_mode=; max-age=0; path=/";
-                window.location.href = "/login";
-              }}
-              className="w-full flex items-center rounded-lg text-xs font-medium transition-colors px-3.5 py-2.5 gap-3"
-              style={{ color: "#EA4335" }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "#FCE8E6")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-              title={!isExpanded ? "Logout" : ""}
-            >
-              <span className="w-5 h-5 flex items-center justify-center flex-shrink-0">
-                <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
-                  <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-                </svg>
-              </span>
-              <span
-                className="transition-all duration-200 whitespace-nowrap overflow-hidden"
-                style={{
-                  opacity: isExpanded ? 1 : 0,
-                  width: isExpanded ? "auto" : "0px",
-                }}
+            {/* Action buttons row under Demo Founder: Portfolio & Logout */}
+            <div className="flex items-center gap-1.5 pt-1">
+              <Link
+                href="/dashboard/portfolio"
+                className="flex-1 flex items-center justify-center rounded-lg text-xs font-bold transition-colors px-3 py-2 gap-2 text-[#1A73E8] bg-[#E8F0FE] hover:bg-[#D2E3FC]"
+                title="Gestisci Portfolio & Startup"
               >
-                {"Logout"}
-              </span>
-            </button>
+                <span className="w-4 h-4 flex items-center justify-center flex-shrink-0 text-sm">
+                  🚀
+                </span>
+                <span
+                  className="transition-all duration-200 whitespace-nowrap overflow-hidden"
+                  style={{
+                    opacity: isExpanded ? 1 : 0,
+                    width: isExpanded ? "auto" : "0px",
+                  }}
+                >
+                  {"Startup"}
+                </span>
+              </Link>
+
+              <button
+                onClick={() => {
+                  document.cookie = "demo_user_id=; max-age=0; path=/";
+                  document.cookie = "demo_mode=; max-age=0; path=/";
+                  window.location.href = "/login";
+                }}
+                className="flex items-center justify-center rounded-lg text-xs font-medium transition-colors px-3 py-2 gap-1.5 text-[#EA4335] hover:bg-[#FCE8E6]"
+                title="Logout"
+              >
+                <span className="w-4 h-4 flex items-center justify-center flex-shrink-0">
+                  <svg viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4">
+                    <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
+                  </svg>
+                </span>
+                {isExpanded && (
+                  <span className="text-xs whitespace-nowrap">Logout</span>
+                )}
+              </button>
+            </div>
           </div>
         </aside>
       </div>
