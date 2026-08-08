@@ -233,6 +233,9 @@ export default function LandingPage() {
             <Link href="#intelligence" className="text-sm text-white/50 hover:text-white/90 transition-colors hidden sm:block">Intelligence</Link>
             <Link href="#agents" className="text-sm text-white/50 hover:text-white/90 transition-colors hidden sm:block">Agents</Link>
             <Link href="#features" className="text-sm text-white/50 hover:text-white/90 transition-colors hidden sm:block">Features</Link>
+            <Link href="/whitepaper" className="text-sm text-indigo-400 font-semibold hover:text-indigo-300 transition-colors flex items-center gap-1">
+              <span>📄 White Paper</span>
+            </Link>
             <Link
               href="/login"
               className="cta-button px-5 py-2 rounded-full text-sm font-semibold text-white"
@@ -283,13 +286,14 @@ export default function LandingPage() {
               Try for free — Access Workspace
             </Link>
             <Link
-              href="#intelligence"
-              className="px-8 py-4 rounded-full text-base font-medium transition-all"
-              style={{ color: "rgba(255,255,255,0.6)", border: "1px solid rgba(255,255,255,0.12)" }}
-              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.3)"; e.currentTarget.style.color = "rgba(255,255,255,0.9)"; }}
-              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.12)"; e.currentTarget.style.color = "rgba(255,255,255,0.6)"; }}
+              href="/whitepaper"
+              className="px-8 py-4 rounded-full text-base font-medium transition-all flex items-center gap-2"
+              style={{ color: "#a5b4fc", background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)" }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(99,102,241,0.6)"; e.currentTarget.style.background = "rgba(99,102,241,0.2)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "rgba(99,102,241,0.3)"; e.currentTarget.style.background = "rgba(99,102,241,0.12)"; }}
             >
-              Explore Intelligence →
+              <span>📄 Read Technical White Paper</span>
+              <span>→</span>
             </Link>
           </div>
 
@@ -592,11 +596,12 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2">
             <div className="w-6 h-6 rounded-md flex items-center justify-center text-white font-bold text-[8px]" style={{ background: "linear-gradient(135deg, #3b82f6, #8b5cf6)" }}>AI</div>
-            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.3)" }}>AI.CoFounder © 2025</span>
+            <span className="text-xs font-medium" style={{ color: "rgba(255,255,255,0.3)" }}>AI.CoFounder © 2026</span>
           </div>
-          <p className="text-xs" style={{ color: "rgba(255,255,255,0.2)" }}>
-            Built for founders who want to move fast.
-          </p>
+          <div className="flex items-center gap-6 text-xs text-white/50">
+            <Link href="/whitepaper" className="hover:text-indigo-400 transition-colors font-medium">📄 White Paper Spiegativo</Link>
+            <Link href="/login" className="hover:text-white transition-colors">Access Workspace</Link>
+          </div>
         </div>
       </footer>
     </main>
