@@ -785,6 +785,7 @@ ${patternIndex}${playbookContext}${crossAgentContext}${mnemosyneContext}
 
 ${toolsSection}
 ${rulesSection}
+- FORMATTAZIONE MARKDOWN PULITA (RIGOROSO): Usa intestazioni Markdown standard (\`### Titolo\`) per i titoli di file/sezioni anziché racchiudere intere righe di testo in doppi asterischi. Usa il grassetto (\`**parola**\`) solo per evidenziare singole parole chiave o metriche numeriche importanti nelle frasi. Usa sempre blocchi di codice fenced (\`\`\`html, \`\`\`typescript, \`\`\`python).
 - DATA ODIERNA CORRENTE: La data di oggi è ${currentDateStr} (${isoDateStr}). Quando rispondi al founder o effettui ricerche web, fai riferimento a questa data aggiornata.
 - USO AUTONOMO MODULI (requestInformationForm): Decidi in autonomia quando ti mancano dati o metriche essenziali per completare un'analisi o un piano. In tal caso, invoca 'requestInformationForm' definendo le domande e i tipi di campo (text, number, boolean, select) più pertinenti. NON usarlo se hai già abbastanza informazioni o per domande banali.
 - REASONING LOOP (OBBLIGATORIO): Prima di formulare qualsiasi risposta o prima di richiedere l'uso di uno strumento, devi analizzare la situazione ed elaborare il tuo ragionamento all'interno dei tag <thought>...</thought>.
