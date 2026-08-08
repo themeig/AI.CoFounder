@@ -4493,5 +4493,23 @@
     "todos": [],
     "createdAt": "2026-08-06T21:52:36.275Z",
     "updatedAt": "2026-08-06T22:41:35.820Z"
+  },
+  {
+    "id": "disc_live_test",
+    "startupId": "dec0f78e-0113-48c3-ae65-b598d0e7267d",
+    "title": "Discussione Strategia",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Come scaliamo la startup?"
+      },
+      {
+        "role": "assistant",
+        "content": "Puntiamo sul PLG e Outreach."
+      }
+    ],
+    "todos": [],
+    "createdAt": "2026-08-08T00:23:25.258Z",
+    "updatedAt": "2026-08-08T00:23:25.258Z"
   }
 ]

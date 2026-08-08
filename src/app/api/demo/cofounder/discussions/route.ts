@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDiscussions, saveDiscussions, Discussion } from "@/lib/custom-discussions";
-import { supabaseFetch } from "@/lib/supabase-demo";
+import { SUPABASE_URL, SUPABASE_SERVICE_KEY } from "@/lib/supabase-demo";
 import { getActiveStartupContext } from "../../startups/route";
 
 export const dynamic = "force-dynamic";
@@ -11,16 +11,29 @@ export async function GET(req: Request) {
     const activeCtx = await getActiveStartupContext(req);
     const startupId = activeCtx.id;
 
-    // 1. Try Supabase Discussion table
-    try {
-      const dbDiscussions = await supabaseFetch(
-        `/Discussion?startupId=eq.${startupId}&order=updatedAt.desc&select=*`
-      );
-      if (Array.isArray(dbDiscussions)) {
-        return NextResponse.json(dbDiscussions);
+    // 1. Try Supabase Discussion table if configured
+    if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      try {
+        const response = await fetch(
+          `${SUPABASE_URL}/rest/v1/Discussion?startupId=eq.${startupId}&order=updatedAt.desc&select=*`,
+          {
+            headers: {
+              apikey: SUPABASE_SERVICE_KEY,
+              Authorization: "Bearer " + SUPABASE_SERVICE_KEY,
+              "Content-Type": "application/json"
+            }
+          }
+        );
+
+        if (response.ok) {
+          const dbDiscussions = await response.json();
+          if (Array.isArray(dbDiscussions)) {
+            return NextResponse.json(dbDiscussions);
+          }
+        }
+      } catch (dbErr: any) {
+        console.warn("[Discussions GET] Supabase Discussion table not ready, falling back to JSON:", dbErr?.message);
       }
-    } catch (dbErr: any) {
-      console.warn("[Discussions GET] Supabase Discussion table not available, falling back to JSON:", dbErr?.message);
     }
 
     // 2. Fallback: local JSON file filtered by startupId
@@ -43,52 +56,80 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Missing discussion id" }, { status: 400 });
     }
 
-    // 1. Try Supabase Discussion table
     let savedToDb = false;
-    try {
-      // Check if discussion exists in DB
-      const existing = await supabaseFetch(`/Discussion?id=eq.${id}&select=id`);
-      if (existing && Array.isArray(existing) && existing.length > 0) {
-        // Update existing
-        const updatePayload: any = { updatedAt: new Date().toISOString() };
-        if (title !== undefined) updatePayload.title = title;
-        if (messages !== undefined) updatePayload.messages = messages;
-        if (todos !== undefined) updatePayload.todos = todos;
 
-        await supabaseFetch(`/Discussion?id=eq.${id}`, {
-          method: "PATCH",
-          body: JSON.stringify(updatePayload)
+    // 1. Try Supabase Discussion table if configured
+    if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      try {
+        const checkRes = await fetch(`${SUPABASE_URL}/rest/v1/Discussion?id=eq.${id}&select=id`, {
+          headers: {
+            apikey: SUPABASE_SERVICE_KEY,
+            Authorization: "Bearer " + SUPABASE_SERVICE_KEY,
+            "Content-Type": "application/json"
+          }
         });
-        savedToDb = true;
 
-        const updated = await supabaseFetch(`/Discussion?id=eq.${id}&select=*`);
-        return NextResponse.json({
-          success: true,
-          discussion: updated && updated.length > 0 ? updated[0] : { id, startupId, title, messages, todos }
-        });
-      } else {
-        // Create new
-        const newDisc = {
-          id,
-          startupId,
-          title: title || "Nuova Conversazione",
-          messages: messages || [],
-          todos: todos || [],
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-        const result = await supabaseFetch("/Discussion", {
-          method: "POST",
-          body: JSON.stringify(newDisc)
-        });
-        savedToDb = true;
-        return NextResponse.json({
-          success: true,
-          discussion: result && result.length > 0 ? result[0] : newDisc
-        });
+        if (checkRes.ok) {
+          const existing = await checkRes.json();
+          if (Array.isArray(existing) && existing.length > 0) {
+            // Update existing
+            const updatePayload: any = { updatedAt: new Date().toISOString() };
+            if (title !== undefined) updatePayload.title = title;
+            if (messages !== undefined) updatePayload.messages = messages;
+            if (todos !== undefined) updatePayload.todos = todos;
+
+            const patchRes = await fetch(`${SUPABASE_URL}/rest/v1/Discussion?id=eq.${id}`, {
+              method: "PATCH",
+              headers: {
+                apikey: SUPABASE_SERVICE_KEY,
+                Authorization: "Bearer " + SUPABASE_SERVICE_KEY,
+                "Content-Type": "application/json",
+                Prefer: "return=representation"
+              },
+              body: JSON.stringify(updatePayload)
+            });
+            if (patchRes.ok) {
+              savedToDb = true;
+              const updated = await patchRes.json();
+              return NextResponse.json({
+                success: true,
+                discussion: Array.isArray(updated) && updated.length > 0 ? updated[0] : { id, startupId, title, messages, todos }
+              });
+            }
+          } else {
+            // Create new
+            const newDisc = {
+              id,
+              startupId,
+              title: title || "Nuova Conversazione",
+              messages: messages || [],
+              todos: todos || [],
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString()
+            };
+            const postRes = await fetch(`${SUPABASE_URL}/rest/v1/Discussion`, {
+              method: "POST",
+              headers: {
+                apikey: SUPABASE_SERVICE_KEY,
+                Authorization: "Bearer " + SUPABASE_SERVICE_KEY,
+                "Content-Type": "application/json",
+                Prefer: "return=representation"
+              },
+              body: JSON.stringify(newDisc)
+            });
+            if (postRes.ok) {
+              savedToDb = true;
+              const result = await postRes.json();
+              return NextResponse.json({
+                success: true,
+                discussion: Array.isArray(result) && result.length > 0 ? result[0] : newDisc
+              });
+            }
+          }
+        }
+      } catch (dbErr: any) {
+        console.warn("[Discussions POST] Supabase Discussion table not ready, falling back to JSON:", dbErr?.message);
       }
-    } catch (dbErr: any) {
-      console.warn("[Discussions POST] Supabase Discussion table not available, falling back to JSON:", dbErr?.message);
     }
 
     // 2. Fallback: local JSON file
@@ -101,6 +142,7 @@ export async function POST(req: Request) {
         target.messages = messages || target.messages;
         if (todos !== undefined) target.todos = todos;
         target.updatedAt = new Date().toISOString();
+        target.startupId = startupId;
       } else {
         const newDisc: Discussion = {
           id,
@@ -133,10 +175,18 @@ export async function DELETE(req: Request) {
     }
 
     // 1. Try Supabase
-    try {
-      await supabaseFetch(`/Discussion?id=eq.${id}`, { method: "DELETE" });
-    } catch (dbErr: any) {
-      console.warn("[Discussions DELETE] Supabase fallback:", dbErr?.message);
+    if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/Discussion?id=eq.${id}`, {
+          method: "DELETE",
+          headers: {
+            apikey: SUPABASE_SERVICE_KEY,
+            Authorization: "Bearer " + SUPABASE_SERVICE_KEY
+          }
+        });
+      } catch (dbErr: any) {
+        console.warn("[Discussions DELETE] Supabase fallback:", dbErr?.message);
+      }
     }
 
     // 2. Also clean from JSON fallback
