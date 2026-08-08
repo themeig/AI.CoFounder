@@ -45,7 +45,7 @@ export default function LoginPage() {
     setInfoMessage("");
 
     try {
-      // In production this connects to NextAuth/Supabase Auth. Demo fallback launches workspace directly for entered email.
+      // Demo fallback: setup user session for entered email directly
       const res = await fetch("/api/demo/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -69,7 +69,30 @@ export default function LoginPage() {
     setError("");
     setInfoMessage("");
     try {
-      // Triggers OAuth 2.0 flow or demo account setup
+      // Redirect to NextAuth Google OAuth sign-in endpoint
+      const nextAuthRes = await fetch("/api/auth/csrf");
+      if (nextAuthRes.ok) {
+        // NextAuth is active -> redirect to Google OAuth
+        window.location.href = "/api/auth/signin/google";
+      } else {
+        // Fallback to demo workspace if NextAuth endpoint is not configured
+        setInfoMessage("Accessing workspace with Google Demo profile...");
+        setTimeout(async () => {
+          const res = await fetch("/api/demo/setup", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ provider: "google" }),
+          });
+          if (res.ok) {
+            window.location.href = "/dashboard/portfolio";
+          } else {
+            setError("Google Sign-In failed.");
+            setGoogleLoading(false);
+          }
+        }, 800);
+      }
+    } catch (err: any) {
+      // Fallback to demo workspace if OAuth endpoint fails
       const res = await fetch("/api/demo/setup", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -78,12 +101,9 @@ export default function LoginPage() {
       if (res.ok) {
         window.location.href = "/dashboard/portfolio";
       } else {
-        setError("Google Sign-In failed.");
+        setError("Google Sign-In error: " + (err?.message || "unknown"));
         setGoogleLoading(false);
       }
-    } catch (err: any) {
-      setError("Google Sign-In error: " + (err?.message || "unknown"));
-      setGoogleLoading(false);
     }
   };
 
