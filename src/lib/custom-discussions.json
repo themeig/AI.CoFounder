@@ -4511,5 +4511,51 @@
     "todos": [],
     "createdAt": "2026-08-08T00:23:25.258Z",
     "updatedAt": "2026-08-08T00:23:25.258Z"
+  },
+  {
+    "id": "disc_hmupm8957gw",
+    "startupId": "8d8f0bf7-658f-4ae8-9a10-565dcf6748ab",
+    "title": "onboarding",
+    "messages": [
+      {
+        "role": "assistant",
+        "content": "Hi! I am your AI CoFounder. I can help you manage your team, create specialized agents, or update startup metrics in real time. What should we tackle today?",
+        "timestamp": "17:22"
+      },
+      {
+        "role": "user",
+        "content": "sai chi sono?",
+        "timestamp": "17:24"
+      },
+      {
+        "role": "assistant",
+        "content": "Sì, in base al contesto della startup che sto gestendo per te:\n\n**Sei il Founder di \"polpette di riso\"** — una startup classificata come **SaaS** in fase **MVP**, con:\n- **MRR**: $0\n- **Utenti**: 0  \n- **Burn Rate**: $0/mese\n- **Runway**: 12 mesi\n- **Descrizione**: \"polpette di riso innovative con più gusti, ancora sviluppo del prodotto in corso\"\n\n---\n\n⚠️ **Nota importante**: C'è una discrepanza tra il **settore dichiarato (SaaS)** e la **descrizione del prodotto (food/CPG — polpette di riso)**. \n\nUn business di polpette di riso fisiche sarebbe tipicamente:\n- **CPG / Food & Beverage** (Consumer Packaged Goods)\n- Oppure **Food Tech** se c'è una forte componente tecnologica (es. piattaforma di ordinazione, supply chain tech, ghost kitchen)\n\n**Vuoi che aggiorni il settore per riflettere meglio la natura reale del business?** Questo impatta su:\n- Metriche tracciate (es. unità vendute vs MRR)\n- Strategie di Go-To-Market\n- Tipologia di investitori target\n- Unit economics (margini prodotto vs SaaS margins)\n\nDimmi tu come procedere.",
+        "thinking": "\n[Debug] 🧠 Ricerca ricordi mnemonici (Mnemosyne) per Co-Founder...\n[Debug] 🧠 Caricati 3 ricordi pertinenti dalla memoria semantica.\n[Debug] 📊 Ricerca casi di studio (Storie) pertinenti per Co-Founder...\n[Debug] 📊 Caricate 3 storie pertinenti dal database.The user is asking if I know who they are. Based on the startup context provided in the system prompt, I can see they are the founder of \"polpette di riso\" - a SaaS startup in MVP phase with $0 MRR, 0 users, $0 burn rate, 12 months runway. The description says \"polpette di riso innovative con piu gusti ancora sviluppo del prodotto in corso\" (innovative rice balls with multiple flavors, product development still in progress).\n\nHowever, this seems like a food/CPG product, not a SaaS. That's an interesting discrepancy - the sector says SaaS but the description is about food products. I should point this out and ask for clarification.\n\nI should respond in Italian as per the instructions.",
+        "timestamp": "17:24",
+        "tools": [],
+        "delegations": [],
+        "agentSuggestion": null,
+        "thinkingTime": "21.9",
+        "isStreaming": false
+      },
+      {
+        "role": "user",
+        "content": "sai che sapore hanno le mie polpette di riso?",
+        "timestamp": "17:24"
+      },
+      {
+        "role": "assistant",
+        "content": "",
+        "thinking": "",
+        "timestamp": "17:24",
+        "tools": [],
+        "delegations": [],
+        "agentSuggestion": null,
+        "isStreaming": true
+      }
+    ],
+    "todos": [],
+    "createdAt": "2026-08-08T00:24:17.671Z",
+    "updatedAt": "2026-08-08T00:24:53.478Z"
   }
 ]
