@@ -540,7 +540,18 @@ manager.print();
         const isoDateStr = new Date().toISOString().split("T")[0];
         const dateHeader = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📅 DATA ODIERNA: ${currentDateStr} (ISO: ${isoDateStr})\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
 
-        let finalSystemPrompt = dateHeader + (soulContent
+        const startupHeader = `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 STARTUP ATTIVA SU CUI STAI LAVORANDO:
+- Nome Startup: "${startup.name}"
+- Settore: ${startup.sector}
+- Fase: ${startup.phase}
+- MRR: $${(startup.mrr || 0).toLocaleString()}
+- Utenti: ${(startup.users || 0).toLocaleString()}
+- Burn Rate: $${(startup.burnRate || 0).toLocaleString()}/mese
+- Runway: ${startup.runway || 0} mesi
+${startup.description ? `- Descrizione: ${startup.description}\n` : ""}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+        let finalSystemPrompt = dateHeader + startupHeader + (soulContent
           ? `# 📝 AGENT SOUL (CUSTOM IDENTITY)\n${soulContent}\n\n${systemPrompt}`
           : systemPrompt);
 
